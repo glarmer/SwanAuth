@@ -1,0 +1,38 @@
+buildscript {
+    repositories {
+        mavenCentral();
+    }
+    dependencies {
+        classpath "mysql:mysql-connector-java:8.0.30"
+    }
+}
+
+plugins {
+    id 'java'
+    id 'application'
+    id "com.github.johnrengelman.shadow" version "6.1.0"
+}
+
+group 'com.discord4j'
+version 'fixed'
+sourceCompatibility = 17
+
+repositories {
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+    maven { url 'https://m2.dv8tion.net/releases' }
+    mavenCentral()
+}
+
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor 60, 'seconds'
+}
+
+dependencies {
+    implementation group: 'com.sun.mail', name: 'javax.mail', version: '1.6.2'
+    implementation 'org.json:json:20220320'
+    implementation "mysql:mysql-connector-java:8.0.30"
+    implementation "com.discord4j:discord4j-core:3.2.3"
+    implementation "ch.qos.logback:logback-classic:1.2.3"
+}
+
+mainClassName = 'com.lordnoisy.swanseaauthenticator.Main'
