@@ -1,19 +1,9 @@
-buildscript {
-    repositories {
-        mavenCentral();
-    }
-    dependencies {
-        classpath "mysql:mysql-connector-java:8.0.30"
-    }
-}
-
 plugins {
     id 'java'
     id 'application'
     id "com.github.johnrengelman.shadow" version "6.1.0"
 }
 
-group 'com.discord4j'
 version 'fixed'
 sourceCompatibility = 17
 
@@ -21,10 +11,6 @@ repositories {
     maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
     maven { url 'https://m2.dv8tion.net/releases' }
     mavenCentral()
-}
-
-configurations.all {
-    resolutionStrategy.cacheChangingModulesFor 60, 'seconds'
 }
 
 dependencies {

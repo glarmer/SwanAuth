@@ -3,23 +3,30 @@ package com.lordnoisy.swanseaauthenticator;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
+import discord4j.core.event.ReactiveEventAdapter;
 import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
+import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.object.command.ApplicationCommandOption;
 import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.Message;
+import discord4j.discordjson.json.ApplicationCommandOptionData;
+import discord4j.discordjson.json.ApplicationCommandRequest;
 import discord4j.gateway.intent.IntentSet;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
+import reactor.util.Logger;
+import reactor.util.Loggers;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class Main {
+    private static final Logger log = Loggers.getLogger(GuildCommandRegistrar.class);
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -68,6 +75,30 @@ public class Main {
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
                 client.gateway().setEnabledIntents(IntentSet.all());
 
+                ApplicationCommandRequest studentCommand = ApplicationCommandRequest.builder()
+                        .name("student")
+                        .description("Begin the verification process by entering your Student ID.")
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name("student_id")
+                                .description("Your Student ID")
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .required(true)
+                                .build())
+                        .build();
+
+                ApplicationCommandRequest verifyCommand = ApplicationCommandRequest.builder()
+                        .name("verify")
+                        .description("Begin the verification process by entering your Student ID.")
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name("verification_code")
+                                .description("The verification code you received via email!")
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .required(true)
+                                .build())
+                        .build();
+
+                List<ApplicationCommandRequest> applicationCommandRequestList = List.of(studentCommand, verifyCommand);
+
                 // Check for guilds that are present but not in the map, and thus not in the db. This could happen if they invite the bot when it's offline
                 gateway.getGuilds().doOnEach(guild -> {
                     try {
@@ -78,6 +109,12 @@ public class Main {
                             GuildData guildData = new GuildData(guildID.asString(), null, null, null, null);
                             guildDataMap.put(guildID, guildData);
                         }
+
+                        GuildCommandRegistrar.create(gateway.getRestClient(), guildID.asLong(), applicationCommandRequestList)
+                                .registerCommands()
+                                .doOnError(e -> log.warn("Unable to create guild command", e))
+                                .onErrorResume(e -> Mono.empty())
+                                .blockLast();
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
                     } catch (SQLException e) {
@@ -94,13 +131,13 @@ public class Main {
                                     Snowflake serverID = event.getGuildId();
                                     GuildData guildData = guildDataMap.get(serverID);
                                     Snowflake unverifiedRoleID = guildData.getUnverifiedRoleID();
-                                    Snowflake messageChannelID = guildData.getVerificationChannelID();
+                                    Snowflake verificationChannelID = guildData.getVerificationChannelID();
                                     Member member = event.getMember();
                                     String memberMention = "<@" + member.getId().asString() + ">";
 
                                     member.addRole(unverifiedRoleID, "Assign default role on join");
 
-                                    gateway.getChannelById(messageChannelID)
+                                    gateway.getChannelById(verificationChannelID)
                                             .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by replying to this message with \"$verify <your_student_number>\""))
                                             .subscribe();
                                 }))
@@ -108,7 +145,7 @@ public class Main {
 
                 //TODO:
                 // Check if the user had any other alts and ban them too
-                // Add them to the database so they may not rejoin
+                // Add them to the database so they may not rejoin and re-verify
                 // The code at activates when a user is banned
                 Mono<Void> actOnBan = gateway.on(BanEvent.class, event ->
                         Mono.fromRunnable(() -> {
@@ -128,20 +165,25 @@ public class Main {
                 // Commands so admins can change the various roles & override
                 // Have a help command for users
                 // Have a setup help command for admins
-                Mono<Void> handleCommands = gateway.on(MessageCreateEvent.class, event -> {
-                    System.out.println("Noticed message");
-                    final Message message = event.getMessage();
-                    String discordID = message.getAuthor().get().getId().asString();
-                    String str = message.getContent();
-                    //add space between . and command
-                    if (str.startsWith("$")) {
-
+                gateway.on(new ReactiveEventAdapter() {
+                    @Override
+                    public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
+                        if (event.getCommandName().equals("student")) {
+                            String result = "Please check your student email for a verification code! When ready use /verify to finish verifying.";
+                            return event.reply(result);
+                        }
+                        if (event.getCommandName().equals("verify")) {
+                            String result = "d";
+                            return event.reply(result);
+                        }
+                        return Mono.empty();
                     }
-                    return Mono.empty();
-                }).then();
+                }).blockLast();
+
+
 
                 // combine them!
-                return actOnJoin.and(handleCommands).and(actOnBan);
+                return actOnJoin.and(actOnBan);
             });
 
             login.block();
