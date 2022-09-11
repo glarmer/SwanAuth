@@ -53,28 +53,83 @@ public class SQLRunner {
         this.CONNECTION = connection;
     }
 
-    /**
-     * Creates the database
-     * @return true if successful, false if otherwise
-     */
-    public boolean createDatabase() {
+    public void firstTimeSetup() {
         try {
-            PreparedStatement databaseStatement = CONNECTION.prepareStatement(CREATE_DATABASE_SQL);
-            databaseStatement.executeQuery();
+            createDatabase();
+            createUsersTable();
+            createAccountsTable();
+            createVerificationsTable();
+            createBansTable();
+            createVerificationTokensTable();
         } catch (SQLException e) {
-            return false;
+            e.printStackTrace();
         }
-        return true;
     }
 
     /**
-     *
-     * @param connection
-     * @param discordID the discord ID to check exists
-     * @param studentID the studentID to check exists
-     * @return true if exists
-     * @throws SQLException
+     * Creates the database
+     * @throws SQLException thrown if database can't be created.
      */
+    public void createDatabase() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_DATABASE_SQL);
+        statement.executeQuery();
+    }
+
+    /**
+     * Creates the guilds table
+     * @throws SQLException thrown if the table can't be created.
+     */
+    public void createGuildsTable() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_GUILDS_TABLE_SQL);
+        statement.executeQuery();
+    }
+
+    /**
+     * Creates the users table
+     * @throws SQLException thrown if the table can't be created.
+     */
+    public void createUsersTable() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_USERS_TABLE_SQL);
+        statement.executeQuery();
+    }
+
+    /**
+     * Creates the accounts table
+     * @throws SQLException thrown if the table can't be created.
+     */
+    public void createAccountsTable() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_ACCOUNTS_TABLE_SQL);
+        statement.executeQuery();
+    }
+
+    /**
+     * Creates the verifications table
+     * @throws SQLException thrown if the table can't be created.
+     */
+    public void createVerificationsTable() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATIONS_TABLE_SQL);
+        statement.executeQuery();
+    }
+
+    /**
+     * Creates the bans table
+     * @throws SQLException thrown if the table can't be created.
+     */
+    public void createBansTable() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_BANS_TABLE_SQL);
+        statement.executeQuery();
+    }
+
+    /**
+     * Creates the verification_tokens table
+     * @throws SQLException thrown if the table can't be created.
+     */
+    public void createVerificationTokensTable() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATION_TOKENS_TABLE);
+        statement.executeQuery();
+    }
+
+    //TODO: Delete
     public static boolean checkIfUserExists(Connection connection, String discordID, String studentID) throws SQLException {
         boolean userExists = false;
 
@@ -98,31 +153,6 @@ public class SQLRunner {
         }
         return userExists;
     }
-
-    /**
-     *
-     * @param connection the db connection
-     * @param discordID the discordID to insert
-     * @param studentID the studentID to insert
-     * @throws SQLException
-     */
-    public static void createUser(Connection connection, String discordID, String studentID) throws SQLException {
-        //Create query
-        PreparedStatement finalQuery = connection.prepareStatement(insertUser);
-        finalQuery.setString(1, discordID);
-        finalQuery.setString(2, studentID);
-
-        finalQuery.execute();
-    }
-
-    /**
-     *
-     * @param connection the db connection
-     * @param discordID the discordID to select
-     * @param studentID the studentID to select
-     * @return
-     * @throws SQLException
-     */
 
 
 }
