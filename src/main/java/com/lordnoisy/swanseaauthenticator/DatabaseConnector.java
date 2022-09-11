@@ -6,6 +6,7 @@ public class DatabaseConnector {
     private String url;
     private String user;
     private String password;
+    private String database = "AUTHENTICATOR";
     private Connection connection;
 
     public DatabaseConnector (String url, String user, String password) {

@@ -45,8 +45,6 @@ public class SQLRunner {
             "timestamp datetime DEFAULT CURRENT_TIMESTAMP()," +
             "FOREIGN KEY (account_id) REFERENCES accounts(account_id));";
 
-
-
     final private Connection CONNECTION;
 
     public SQLRunner (Connection connection){

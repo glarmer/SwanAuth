@@ -17,6 +17,8 @@ import discord4j.gateway.intent.IntentSet;
 import reactor.core.publisher.Mono;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,10 +35,25 @@ public class Main {
             String token = args[0];
             DatabaseConnector databaseConnector = new DatabaseConnector(args[1], args[2], args[3]);
             Connection connection = databaseConnector.getDatabaseConnection();
+            SQLRunner sqlRunner = new SQLRunner(connection);
             EmailSender emailSender = new EmailSender(args[4], Integer.valueOf(args[5]), args[6], args[7], args[8]);
 
-            DiscordClient client = DiscordClient.create(token);
+            //Check if mysql database is set up, set it up if it isn't.
+            try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet tableCheck = metaData.getTables(null, null, "guilds", null);
+                if (tableCheck.next()) {
+                    System.out.println("Database seems to exist... continuing.");
+                }
+                else {
+                    sqlRunner.firstTimeSetup();
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                System.exit(1);
+            }
 
+            DiscordClient client = DiscordClient.create(token);
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
 
                 //TODO : Get each servers details and enter it into a map
@@ -131,7 +148,7 @@ public class Main {
             login.block();
         } else {
           System.out.println("You have entered the incorrect amount of command line arguments, please check that your mySQL and Email login is entered correctly.");
-
+          System.exit(1);
         }
     }
 }
