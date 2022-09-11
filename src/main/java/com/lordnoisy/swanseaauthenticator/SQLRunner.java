@@ -4,12 +4,6 @@ import java.sql.*;
 import java.util.ArrayList;
 
 public class SQLRunner {
-    //TODO : Probably a lot of this will change because the backend needs to change to accommodate multiple servers
-
-    final private static String deletePendingVerification = "DELETE FROM pending WHERE verification_key = ?;";
-    final private static String insertUserIDIntoBlacklisted = "INSERT INTO blacklisted (user_id) VALUES (?);";
-    final private static String selectPendingInvitesMadeWithin24Hours = "SELECT * FROM pending WHERE user_id = ? AND time_created >= NOW() - INTERVAL 1 DAY;";
-
     //Database + Table creation SQL
     final private String CREATE_DATABASE_SQL = "CREATE DATABASE AUTHENTICATOR;";
     final private String CREATE_GUILDS_TABLE_SQL = "CREATE TABLE guilds (" +
@@ -48,6 +42,9 @@ public class SQLRunner {
     //SELECT Statements
     final private String SELECT_GUILDS_SQL = "SELECT * FROM guilds;";
 
+    //INSERT Statements
+    final private String INSERT_GUILD_SQL = "INSERT INTO guilds (guild_id) VALUES (?);";
+
     final private Connection CONNECTION;
 
     public SQLRunner (Connection connection){
@@ -79,6 +76,17 @@ public class SQLRunner {
     public ResultSet getGuilds() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(SELECT_GUILDS_SQL);
         return statement.executeQuery();
+    }
+
+    /**
+     * Inserts a guild into the database
+     * @param guildID the id of the guild to insert
+     * @throws SQLException if query fails
+     */
+    public void insertGuild(String guildID) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_GUILD_SQL);
+        statement.setString(1, guildID);
+        statement.execute();
     }
 
     /**
@@ -142,31 +150,6 @@ public class SQLRunner {
     public void createVerificationTokensTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATION_TOKENS_TABLE);
         statement.executeQuery().close();
-    }
-
-    //TODO: Delete
-    public static boolean checkIfUserExists(Connection connection, String discordID, String studentID) throws SQLException {
-        boolean userExists = false;
-
-        //Create query
-        PreparedStatement finalQuery = connection.prepareStatement(selectUserQuery);
-        finalQuery.setString(1, discordID);
-        finalQuery.setString(2, studentID);
-
-        //Execute it
-        ResultSet resultSet = finalQuery.executeQuery();
-
-        //Count the results
-        int totalResults = 0;
-        while (resultSet.next()) {
-            totalResults ++;
-        }
-
-        //If there are results, return true
-        if (totalResults > 0) {
-            userExists = true;
-        }
-        return userExists;
     }
 
 

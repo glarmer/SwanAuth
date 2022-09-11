@@ -66,38 +66,35 @@ public class Main {
 
             DiscordClient client = DiscordClient.create(token);
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
+                client.gateway().setEnabledIntents(IntentSet.all());
 
                 // Check for guilds that are present but not in the map, and thus not in the db. This could happen if they invite the bot when it's offline
                 gateway.getGuilds().doOnEach(guild -> {
                     try {
                         Snowflake guildID = guild.get().getId();
-                        //TODO: Check if there is a guild with the same id in the map
-                        // do nothing if there is, if there isn't add the server to the db and map
                         if (guildDataMap.get(guildID) == null) {
-                            //insert into db
+                            sqlRunner.insertGuild(guildID.asString());
                             GuildData guildData = new GuildData(guildID.asString(), null, null, null, null);
                         }
-
-
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                        System.out.println("Couldn't insert guild... continuing but there might be issues.");
                     }
                 }).then().subscribe();
-
-                client.gateway().setEnabledIntents(IntentSet.all());
-
 
                 //TODO : Error handling for is default role is not set, essentially make it do nothing.
                 Mono<Void> actOnJoin = gateway.on(MemberJoinEvent.class, event ->
                                 Mono.fromRunnable(() -> {
                                     Snowflake serverID = event.getGuildId();
-                                    GuildData guildData = serverMap.get(serverID);
-                                    Snowflake defaultRoleID = guildData.getDefaultRoleID();
+                                    GuildData guildData = guildDataMap.get(serverID);
+                                    Snowflake unverifiedRoleID = guildData.getUnverifiedRoleID();
                                     Snowflake messageChannelID = guildData.getVerificationChannelID();
                                     Member member = event.getMember();
                                     String memberMention = "<@" + member.getId().asString() + ">";
 
-                                    member.addRole(defaultRoleID, "Assign default role on join");
+                                    member.addRole(unverifiedRoleID, "Assign default role on join");
 
                                     gateway.getChannelById(messageChannelID)
                                             .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by replying to this message with \"$verify <your_student_number>\""))
@@ -129,7 +126,7 @@ public class Main {
 
                             } catch (Exception e) {
                                 e.printStackTrace();
-                                System.out.println("It is likely this user did not verify.");
+                                System.out.println("It is likely the user was never verified.");
                             }
                         })).then();
 
