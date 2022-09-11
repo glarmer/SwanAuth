@@ -12,12 +12,38 @@ public class SQLRunner {
 
     //Database + Table creation SQL
     final private String CREATE_DATABASE_SQL = "CREATE DATABASE AUTHENTICATOR;";
-    final private String CREATE_GUILDS_TABLE_SQL = "CREATE TABLE guilds (guild_id varchar(255) NOT NULL," +
+    final private String CREATE_GUILDS_TABLE_SQL = "CREATE TABLE guilds (" +
+            "guild_id varchar(255) NOT NULL," +
             "admin_channel_id varchar(255)," +
             "verification_channel_id varchar(255)," +
             "unverified_role_id varchar(255)," +
             "verified_role_id varchar(255)," +
             "PRIMARY KEY (guild_id));";
+    final private String CREATE_USERS_TABLE_SQL = "CREATE TABLE users(" +
+            "user_id int NOT NULL AUTO_INCREMENT," +
+            "student_id varchar(255)," +
+            "PRIMARY KEY(user_id));";
+    final private String CREATE_ACCOUNTS_TABLE_SQL = "CREATE TABLE accounts(" +
+            "account_id int NOT NULL AUTO_INCREMENT," +
+            "user_id int NOT NULL," +
+            "discord_id varchar(255)," +
+            "FOREIGN KEY (user_id) REFERENCES users(user_id)," +
+            "PRIMARY KEY(account_id));";
+    final private String CREATE_VERIFICATIONS_TABLE_SQL = "CREATE TABLE verifications(" +
+            "account_id int NOT NULL," +
+            "guild_id varchar(255) NOT NULL," +
+            "FOREIGN KEY (guild_id) REFERENCES guilds(guild_id)," +
+            "FOREIGN KEY (account_id) REFERENCES accounts(account_id));";
+    final private String CREATE_BANS_TABLE_SQL = "CREATE TABLE bans(" +
+            "user_id int NOT NULL," +
+            "guild_id varchar(255) NOT NULL," +
+            "FOREIGN KEY (user_id) REFERENCES users(user_id)," +
+            "FOREIGN KEY (guild_id) REFERENCES guilds(guild_id));";
+    final private String CREATE_VERIFICATION_TOKENS_TABLE = "CREATE TABLE verification_tokens(" +
+            "account_id int NOT NULL," +
+            "token varchar(255)," +
+            "timestamp datetime DEFAULT CURRENT_TIMESTAMP()," +
+            "FOREIGN KEY (account_id) REFERENCES accounts(account_id));";
 
 
 
@@ -27,9 +53,17 @@ public class SQLRunner {
         this.CONNECTION = connection;
     }
 
+    /**
+     * Creates the database
+     * @return true if successful, false if otherwise
+     */
     public boolean createDatabase() {
-
-
+        try {
+            PreparedStatement databaseStatement = CONNECTION.prepareStatement(CREATE_DATABASE_SQL);
+            databaseStatement.executeQuery();
+        } catch (SQLException e) {
+            return false;
+        }
         return true;
     }
 
