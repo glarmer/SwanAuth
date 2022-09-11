@@ -73,8 +73,10 @@ public class Main {
                     try {
                         Snowflake guildID = guild.get().getId();
                         if (guildDataMap.get(guildID) == null) {
+                            System.out.println("Guild ID: "+ guildID.asString());
                             sqlRunner.insertGuild(guildID.asString());
                             GuildData guildData = new GuildData(guildID.asString(), null, null, null, null);
+                            guildDataMap.put(guildID, guildData);
                         }
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
@@ -83,6 +85,8 @@ public class Main {
                         System.out.println("Couldn't insert guild... continuing but there might be issues.");
                     }
                 }).then().subscribe();
+
+                //TODO : Some logic for unbanning
 
                 //TODO : Error handling for is default role is not set, essentially make it do nothing.
                 Mono<Void> actOnJoin = gateway.on(MemberJoinEvent.class, event ->
@@ -110,24 +114,10 @@ public class Main {
                         Mono.fromRunnable(() -> {
                             String memberID = event.getUser().getId().asString();
                             String memberName0 = event.getUser().getUsername();
-                            try {
-                                ArrayList<String> toBlacklist = SQLRunner.blackListUser(connection, memberID);
-                                for (int i = 0; i < toBlacklist.size(); i++) {
-                                    try {
-                                        String memberName = event.getGuild().block().getMemberById(Snowflake.of(toBlacklist.get(i))).block().getUsername();
-                                        event.getGuild().block().getMemberById(Snowflake.of(toBlacklist.get(i))).block().addRole(Snowflake.of(blacklistedRoleID)).subscribe();
-                                        event.getGuild().block().getChannelById(Snowflake.of(adminChannel)).block().getRestChannel().createMessage("Blacklisted <@" + toBlacklist.get(i) + "> : " + memberName).subscribe();
-                                        event.getGuild().block().ban(Snowflake.of(toBlacklist.get(i))).block();
-                                    } catch (Exception e) {
-                                        e.printStackTrace();
-                                    }
-                                }
-                                event.getGuild().block().getChannelById(Snowflake.of(adminChannel)).block().getRestChannel().createMessage("Blacklisted <@" + memberID + "> : " + memberName0).subscribe();
 
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                System.out.println("It is likely the user was never verified.");
-                            }
+                            //TODO:
+                            // Find all accounts verified under the same student ID
+                            //
                         })).then();
 
                 //TODO:

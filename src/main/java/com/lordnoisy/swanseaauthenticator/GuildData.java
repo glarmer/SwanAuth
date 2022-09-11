@@ -23,10 +23,18 @@ public class GuildData {
      */
     public GuildData(String guildID, String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID){
         this.guildID = Snowflake.of(guildID);
-        this.verificationChannelID = Snowflake.of(verificationChannelID);
-        this.adminChannelID = Snowflake.of(adminChannelID);
-        this.unverifiedRoleID = Snowflake.of(unverifiedRoleID);
-        this.verifiedRoleID = Snowflake.of(verifiedRoleID);
+        if (verificationChannelID != null) {
+            this.verificationChannelID = Snowflake.of(verificationChannelID);
+        }
+        if (adminChannelID != null) {
+            this.adminChannelID = Snowflake.of(adminChannelID);
+        }
+        if (unverifiedRoleID != null) {
+            this.unverifiedRoleID = Snowflake.of(unverifiedRoleID);
+        }
+        if (verifiedRoleID != null) {
+            this.verifiedRoleID = Snowflake.of(verifiedRoleID);
+        }
     }
 
     public Snowflake getVerificationChannelID() {
