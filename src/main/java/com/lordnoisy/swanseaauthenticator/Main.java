@@ -6,13 +6,8 @@ import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
-import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.Message;
-import discord4j.core.object.entity.channel.Channel;
-import discord4j.core.object.entity.channel.MessageChannel;
-import discord4j.core.object.entity.channel.PrivateChannel;
-import discord4j.core.spec.MessageCreateMono;
 import discord4j.gateway.intent.IntentSet;
 import reactor.core.publisher.Mono;
 
@@ -25,10 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Main {
-    private boolean enabled = true;
 
-    //TODO : I have removed the majority of the code here, this is just a shell, so write all of this
-    //TODO : Maybe make a setup tutorial for admins when they invite the bot
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
         if (args.length == 9) {
@@ -47,26 +39,46 @@ public class Main {
                 }
                 else {
                     sqlRunner.firstTimeSetup();
+                    tableCheck.close();
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
                 System.exit(1);
             }
 
+            // Creates a map containing details of each server stored in the mySQL db
+            final Map<Snowflake, GuildData> guildDataMap = new HashMap<>();
+            try {
+                ResultSet results = sqlRunner.getGuilds();
+                while (results.next()) {
+                    String currentGuildID = results.getString(1);
+                    String currentAdminChannelID = results.getString(2);
+                    String currentVerificationChannelID = results.getString(3);
+                    String currentUnverifiedRoleID = results.getString(4);
+                    String currentVerifiedRoleID = results.getString(5);
+                    GuildData guildData = new GuildData(currentGuildID, currentAdminChannelID, currentVerificationChannelID, currentUnverifiedRoleID, currentVerifiedRoleID);
+                    guildDataMap.put(Snowflake.of(currentGuildID), guildData);
+                }
+                results.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
             DiscordClient client = DiscordClient.create(token);
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
 
-                //TODO : Get each servers details and enter it into a map
-                final Map<Snowflake, GuildData> serverMap = new HashMap<>();
+                // Check for guilds that are present but not in the map, and thus not in the db. This could happen if they invite the bot when it's offline
                 gateway.getGuilds().doOnEach(guild -> {
                     try {
                         Snowflake guildID = guild.get().getId();
-                        //TODO: Get the server info from the mySQL database, if there is none create the empty db stuff
-                        // Check if table for server exists
-                        // if it exists get the info, make a new GuildData with the info
-                        // if it doesn't exist make the table and db entries (although it will be mostly empty) and make a new GuildData
-                        // TODO:
-                        // serverMap.put(guildID, guildData);
+                        //TODO: Check if there is a guild with the same id in the map
+                        // do nothing if there is, if there isn't add the server to the db and map
+                        if (guildDataMap.get(guildID) == null) {
+                            //insert into db
+                            GuildData guildData = new GuildData(guildID.asString(), null, null, null, null);
+                        }
+
+
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
                     }
@@ -81,7 +93,7 @@ public class Main {
                                     Snowflake serverID = event.getGuildId();
                                     GuildData guildData = serverMap.get(serverID);
                                     Snowflake defaultRoleID = guildData.getDefaultRoleID();
-                                    Snowflake messageChannelID = guildData.getMessageChannelID();
+                                    Snowflake messageChannelID = guildData.getVerificationChannelID();
                                     Member member = event.getMember();
                                     String memberMention = "<@" + member.getId().asString() + ">";
 

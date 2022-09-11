@@ -45,15 +45,22 @@ public class SQLRunner {
             "timestamp datetime DEFAULT CURRENT_TIMESTAMP()," +
             "FOREIGN KEY (account_id) REFERENCES accounts(account_id));";
 
+    //SELECT Statements
+    final private String SELECT_GUILDS_SQL = "SELECT * FROM guilds;";
+
     final private Connection CONNECTION;
 
     public SQLRunner (Connection connection){
         this.CONNECTION = connection;
     }
 
+    /**
+     * Perform first time set up of the database
+     */
     public void firstTimeSetup() {
         try {
             createDatabase();
+            createGuildsTable();
             createUsersTable();
             createAccountsTable();
             createVerificationsTable();
@@ -65,12 +72,22 @@ public class SQLRunner {
     }
 
     /**
+     * Retrieves guilds from database
+     * @return guilds
+     * @throws SQLException if query fails
+     */
+    public ResultSet getGuilds() throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_GUILDS_SQL);
+        return statement.executeQuery();
+    }
+
+    /**
      * Creates the database
      * @throws SQLException thrown if database can't be created.
      */
     public void createDatabase() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_DATABASE_SQL);
-        statement.executeQuery();
+        statement.executeQuery().close();
     }
 
     /**
@@ -79,7 +96,7 @@ public class SQLRunner {
      */
     public void createGuildsTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_GUILDS_TABLE_SQL);
-        statement.executeQuery();
+        statement.executeQuery().close();
     }
 
     /**
@@ -88,7 +105,7 @@ public class SQLRunner {
      */
     public void createUsersTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_USERS_TABLE_SQL);
-        statement.executeQuery();
+        statement.executeQuery().close();
     }
 
     /**
@@ -97,7 +114,7 @@ public class SQLRunner {
      */
     public void createAccountsTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_ACCOUNTS_TABLE_SQL);
-        statement.executeQuery();
+        statement.executeQuery().close();
     }
 
     /**
@@ -106,7 +123,7 @@ public class SQLRunner {
      */
     public void createVerificationsTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATIONS_TABLE_SQL);
-        statement.executeQuery();
+        statement.executeQuery().close();
     }
 
     /**
@@ -115,7 +132,7 @@ public class SQLRunner {
      */
     public void createBansTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_BANS_TABLE_SQL);
-        statement.executeQuery();
+        statement.executeQuery().close();
     }
 
     /**
@@ -124,7 +141,7 @@ public class SQLRunner {
      */
     public void createVerificationTokensTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATION_TOKENS_TABLE);
-        statement.executeQuery();
+        statement.executeQuery().close();
     }
 
     //TODO: Delete
