@@ -44,6 +44,10 @@ public class SQLRunner {
 
     //INSERT Statements
     final private String INSERT_GUILD_SQL = "INSERT INTO guilds (guild_id) VALUES (?);";
+    final private String INSERT_VERIFICATION_TOKEN_SQL = "INSERT INTO verification_tokens (account_id, token) VALUES (?, ?);";
+
+    //Update Statements
+    final private String UPDATE_GUILD_DATA_SQL = "UPDATE guilds SET admin_channel_id = ?, verification_channel_id = ?, unverified_role_id = ?, verified_role_id = ? WHERE guild_id = ?;";
 
     final private Connection CONNECTION;
 
@@ -86,7 +90,29 @@ public class SQLRunner {
         PreparedStatement statement = CONNECTION.prepareStatement(INSERT_GUILD_SQL);
         statement.setString(1, guildID);
         statement.execute();
+        statement.close();
     }
+
+    /**
+     * Inserts a guild's data into the db
+     * @param adminChannelID admin channel ID
+     * @param verificationChannelID verification channel ID
+     * @param unverifiedRoleID unverified role ID
+     * @param verifiedRoleID verified role ID
+     * @param guildID the guild ID
+     * @throws SQLException if query fails
+     */
+    public void updateGuildData(String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String guildID) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(UPDATE_GUILD_DATA_SQL);
+        statement.setString(1, adminChannelID);
+        statement.setString(2, verificationChannelID);
+        statement.setString(3, unverifiedRoleID);
+        statement.setString(4, verifiedRoleID);
+        statement.setString(5, guildID);
+        statement.execute();
+        statement.close();
+    }
+
 
     /**
      * Creates the database
@@ -95,6 +121,7 @@ public class SQLRunner {
     public void createDatabase() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_DATABASE_SQL);
         statement.execute();
+        statement.close();
     }
 
     /**
@@ -104,6 +131,7 @@ public class SQLRunner {
     public void createGuildsTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_GUILDS_TABLE_SQL);
         statement.execute();
+        statement.close();
     }
 
     /**
@@ -113,6 +141,7 @@ public class SQLRunner {
     public void createUsersTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_USERS_TABLE_SQL);
         statement.execute();
+        statement.close();
     }
 
     /**
@@ -122,6 +151,7 @@ public class SQLRunner {
     public void createAccountsTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_ACCOUNTS_TABLE_SQL);
         statement.execute();
+        statement.close();
     }
 
     /**
@@ -131,6 +161,7 @@ public class SQLRunner {
     public void createVerificationsTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATIONS_TABLE_SQL);
         statement.execute();
+        statement.close();
     }
 
     /**
@@ -140,6 +171,7 @@ public class SQLRunner {
     public void createBansTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_BANS_TABLE_SQL);
         statement.execute();
+        statement.close();
     }
 
     /**
@@ -149,6 +181,7 @@ public class SQLRunner {
     public void createVerificationTokensTable() throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATION_TOKENS_TABLE);
         statement.execute();
+        statement.close();
     }
 
 

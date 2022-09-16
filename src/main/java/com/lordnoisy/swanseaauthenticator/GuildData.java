@@ -55,4 +55,20 @@ public class GuildData {
     public Snowflake getAdminChannelID() {
         return adminChannelID;
     }
+
+    public void setVerificationChannelID(Snowflake verificationChannelID) {
+        this.verificationChannelID = verificationChannelID;
+    }
+
+    public void setUnverifiedRoleID(Snowflake unverifiedRoleID) {
+        this.unverifiedRoleID = unverifiedRoleID;
+    }
+
+    public void setVerifiedRoleID(Snowflake verifiedRoleID) {
+        this.verifiedRoleID = verifiedRoleID;
+    }
+
+    public void setAdminChannelID(Snowflake adminChannelID) {
+        this.adminChannelID = adminChannelID;
+    }
 }

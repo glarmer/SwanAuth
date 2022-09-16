@@ -7,14 +7,15 @@ import discord4j.core.event.ReactiveEventAdapter;
 import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
-import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.command.ApplicationCommandOption;
+import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
-import discord4j.core.object.entity.Message;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
 import discord4j.gateway.intent.IntentSet;
+import discord4j.rest.util.Permission;
 import org.reactivestreams.Publisher;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
@@ -24,6 +25,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Main {
     private static final Logger log = Loggers.getLogger(GuildCommandRegistrar.class);
@@ -75,8 +77,9 @@ public class Main {
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
                 client.gateway().setEnabledIntents(IntentSet.all());
 
-                ApplicationCommandRequest studentCommand = ApplicationCommandRequest.builder()
-                        .name("student")
+                // Make commands
+                ApplicationCommandRequest beginCommand = ApplicationCommandRequest.builder()
+                        .name("begin")
                         .description("Begin the verification process by entering your Student ID.")
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("student_id")
@@ -97,7 +100,41 @@ public class Main {
                                 .build())
                         .build();
 
-                List<ApplicationCommandRequest> applicationCommandRequestList = List.of(studentCommand, verifyCommand);
+                ApplicationCommandRequest setupCommand = ApplicationCommandRequest.builder()
+                        .name("setup")
+                        .description("Configure the bot so it can begin verifying users!")
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name("verification_channel")
+                                .description("The channel that you want the bot to use for verifications.")
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .required(true)
+                                .build())
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name("admin_channel")
+                                .description("The channel that you want the bot to use for admin messages.")
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .required(true)
+                                .build())
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name("unverified_role")
+                                .description("The unverified role you want to apply to users when they join the server.")
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .required(true)
+                                .build())
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name("verified_role")
+                                .description("The verified role you want to apply to users after they verify.")
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .required(true)
+                                .build())
+                        .build();
+
+                ApplicationCommandRequest helpCommand = ApplicationCommandRequest.builder()
+                        .name("help")
+                        .description("Run this command to get help on how to use the bot!")
+                        .build();
+
+                List<ApplicationCommandRequest> applicationCommandRequestList = List.of(beginCommand, verifyCommand, helpCommand, setupCommand);
 
                 // Check for guilds that are present but not in the map, and thus not in the db. This could happen if they invite the bot when it's offline
                 gateway.getGuilds().doOnEach(guild -> {
@@ -110,11 +147,13 @@ public class Main {
                             guildDataMap.put(guildID, guildData);
                         }
 
+                        // Register commands in each guild
                         GuildCommandRegistrar.create(gateway.getRestClient(), guildID.asLong(), applicationCommandRequestList)
                                 .registerCommands()
                                 .doOnError(e -> log.warn("Unable to create guild command", e))
                                 .onErrorResume(e -> Mono.empty())
                                 .blockLast();
+
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
                     } catch (SQLException e) {
@@ -138,7 +177,7 @@ public class Main {
                                     member.addRole(unverifiedRoleID, "Assign default role on join");
 
                                     gateway.getChannelById(verificationChannelID)
-                                            .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by replying to this message with \"$verify <your_student_number>\""))
+                                            .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!"))
                                             .subscribe();
                                 }))
                         .then();
@@ -157,6 +196,7 @@ public class Main {
                             //
                         })).then();
 
+                //Logic for commands
                 //TODO:
                 // Carry out the verification process
                 // Have good error messages
@@ -168,19 +208,122 @@ public class Main {
                 gateway.on(new ReactiveEventAdapter() {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
-                        if (event.getCommandName().equals("student")) {
+                        if (event.getCommandName().equals("begin")) {
                             String result = "Please check your student email for a verification code! When ready use /verify to finish verifying.";
+
+                            String studentNumber = event.getOption("student_number").get().getValue().get().asString();
+
+                            if (studentNumber.matches("\\d+")) {
+                                String verificationCode = StringUtilities.getAlphaNumericString(20);
+
+                                emailSender.sendVerificationEmail(studentNumber, verificationCode);
+                            } else {
+                                result = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
+                            }
+
+
+
                             return event.reply(result);
                         }
                         if (event.getCommandName().equals("verify")) {
                             String result = "d";
                             return event.reply(result);
                         }
+                        if (event.getCommandName().equals("setup")) {
+                            String result = "You have successfully configured the bot!";
+
+                            //Get inputs
+                            String verificationChannel = event.getOption("verification_channel").get().getValue().get().asString();
+                            String adminChannel = event.getOption("admin_channel").get().getValue().get().asString();
+                            String unverifiedRole = event.getOption("unverified_role").get().getValue().get().asString();
+                            String verifiedRole = event.getOption("verified_role").get().getValue().get().asString();
+
+                            //Check if admin
+                            AtomicBoolean admin = new AtomicBoolean(false);
+                            event.getInteraction()
+                                    .getMember()
+                                    .get()
+                                    .getBasePermissions()
+                                    .map(perms -> perms.contains(Permission.ADMINISTRATOR))
+                                    .subscribe(hasAdmin -> admin.set(hasAdmin));
+
+                            if (!admin.get()){
+                                result = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
+                                return event.reply(result);
+                            }
+
+                            //Validate the inputs
+                            AtomicBoolean verificationChannelValid = new AtomicBoolean(false);
+                            AtomicBoolean adminChannelValid = new AtomicBoolean(false);
+                            AtomicBoolean unverifiedRoleValid = new AtomicBoolean(false);
+                            AtomicBoolean verifiedRoleValid = new AtomicBoolean(false);
+
+                            Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
+
+                            if (verificationChannel.matches("\\d+")) {
+                                gateway.getChannelById(Snowflake.of(verificationChannel))
+                                        .map(channel -> channel.getId().asString().equals(verificationChannel))
+                                        .subscribe(hasChannel -> verificationChannelValid.set(hasChannel));
+                            }
+                            if (adminChannel.matches("\\d+")) {
+                                gateway.getChannelById(Snowflake.of(adminChannel))
+                                        .map(channel -> channel.getId().asString().equals(adminChannel))
+                                        .subscribe(hasChannel -> adminChannelValid.set(hasChannel));
+                            }
+                            if (unverifiedRole.matches("\\d+")) {
+                                gateway.getRoleById(guildSnowflake, Snowflake.of(unverifiedRole))
+                                        .map(role -> role.getId().asString().equals(unverifiedRole))
+                                        .subscribe(hasRole -> unverifiedRoleValid.set(hasRole));
+                            }
+                            if (verifiedRole.matches("\\d+")) {
+                                gateway.getRoleById(guildSnowflake, Snowflake.of(verifiedRole))
+                                        .map(role -> role.getId().asString().equals(verifiedRole))
+                                        .subscribe(hasRole -> verifiedRoleValid.set(hasRole));
+                            }
+
+                            //Output any errors
+                            if (!verificationChannelValid.get() || !adminChannelValid.get() || !unverifiedRoleValid.get() || !verifiedRoleValid.get()) {
+                                result = "";
+                                if (!verificationChannelValid.get()) {
+                                    result = "The verification channel ID you entered does not seem to exist in this server. ";
+                                }
+                                if (!adminChannelValid.get()) {
+                                    result = result + "The admin channel ID you entered does not seem to exist in this server. ";
+                                }
+                                if (!unverifiedRoleValid.get()) {
+                                    result = result + "The unverified role ID you entered does not seem to exist in this server. ";
+                                }
+                                if (!verifiedRoleValid.get()) {
+                                    result = result + "The verified role ID you entered does not seem to exist in this server. ";
+                                }
+                                return event.reply(result);
+                            }
+
+                            //Enter the new configuration into the database
+                            try {
+                                sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString());
+                            } catch (SQLException e) {
+                                e.printStackTrace();
+                                result = "Configuring bot failed, please try again or contact the bot admin.";
+                                return event.reply(result);
+                            }
+
+                            //Edit the existing GuildData for this server
+                            GuildData guildData = guildDataMap.get(guildSnowflake);
+                            guildData.setAdminChannelID(Snowflake.of(adminChannel));
+                            guildData.setVerificationChannelID(Snowflake.of(verificationChannel));
+                            guildData.setUnverifiedRoleID(Snowflake.of(unverifiedRole));
+                            guildData.setVerifiedRoleID(Snowflake.of(verifiedRole));
+
+                            return event.reply(result);
+                        }
+                        if (event.getCommandName().equals("help")) {
+                            String result = "To begin verification run /verify! Admins can run /setup to configure the bot!";
+                            return event.reply(result);
+                        }
                         return Mono.empty();
                     }
                 }).blockLast();
-
-
 
                 // combine them!
                 return actOnJoin.and(actOnBan);
