@@ -1,7 +1,6 @@
 package com.lordnoisy.swanseaauthenticator;
 
 import java.sql.*;
-import java.util.ArrayList;
 
 public class SQLRunner {
     //Database + Table creation SQL
@@ -35,16 +34,21 @@ public class SQLRunner {
             "FOREIGN KEY (guild_id) REFERENCES guilds(guild_id));";
     final private String CREATE_VERIFICATION_TOKENS_TABLE = "CREATE TABLE verification_tokens(" +
             "account_id int NOT NULL," +
-            "token varchar(255)," +
+            "token varchar(20)," +
             "timestamp datetime DEFAULT CURRENT_TIMESTAMP()," +
             "FOREIGN KEY (account_id) REFERENCES accounts(account_id));";
 
     //SELECT Statements
     final private String SELECT_GUILDS_SQL = "SELECT * FROM guilds;";
+    final private String SELECT_VERIFICATION_TOKENS_SQL = "SELECT * FROM verification_tokens WHERE account_id = ? AND timestamp > now() - interval 12 hour;";
+    final private String SELECT_USER_BY_STUDENT_ID_SQL = "SELECT * FROM users WHERE student_id = ?;";
+    final private String SELECT_ACCOUNT_BY_USER_AND_DISCORD_SQL = "SELECT * FROM accounts WHERE user_id = ? AND discord_id = ?;";
 
     //INSERT Statements
     final private String INSERT_GUILD_SQL = "INSERT INTO guilds (guild_id) VALUES (?);";
     final private String INSERT_VERIFICATION_TOKEN_SQL = "INSERT INTO verification_tokens (account_id, token) VALUES (?, ?);";
+    final private String INSERT_USER_SQL = "INSERT INTO users (student_id) VALUES (?);";
+    final private String INSERT_ACCOUNT_SQL = "INSERT INTO accounts (user_id, discord_id) VALUES (?,?);";
 
     //Update Statements
     final private String UPDATE_GUILD_DATA_SQL = "UPDATE guilds SET admin_channel_id = ?, verification_channel_id = ?, unverified_role_id = ?, verified_role_id = ? WHERE guild_id = ?;";
@@ -82,6 +86,45 @@ public class SQLRunner {
     }
 
     /**
+     * Select a user by their student ID
+     * @param studentID the user's student ID
+     * @return the results of the query
+     * @throws SQLException if query fails
+     */
+    public ResultSet selectUser(String studentID) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_USER_BY_STUDENT_ID_SQL);
+        statement.setString(1, studentID);
+        return statement.executeQuery();
+    }
+
+    public ResultSet selectAccount(String userID, String discordID) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_ACCOUNT_BY_USER_AND_DISCORD_SQL);
+        statement.setString(1, userID);
+        statement.setString(2, discordID);
+        return statement.executeQuery();
+    }
+
+    /**
+     * Select verification tokens of an account
+     * @param accountID the account to get associated tokens
+     * @return the results of the query
+     * @throws SQLException if query fails
+     */
+    public ResultSet selectVerificationTokens(String accountID) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_VERIFICATION_TOKENS_SQL);
+        statement.setString(1, accountID);
+        return statement.executeQuery();
+    }
+
+    public void insertAccount(String userID, String discordID) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_ACCOUNT_SQL);
+        statement.setString(1, userID);
+        statement.setString(2, discordID);
+        statement.execute();
+        statement.close();
+    }
+
+    /**
      * Inserts a guild into the database
      * @param guildID the id of the guild to insert
      * @throws SQLException if query fails
@@ -89,6 +132,26 @@ public class SQLRunner {
     public void insertGuild(String guildID) throws SQLException {
         PreparedStatement statement = CONNECTION.prepareStatement(INSERT_GUILD_SQL);
         statement.setString(1, guildID);
+        statement.execute();
+        statement.close();
+    }
+
+    public void insertUser(String studentID) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_USER_SQL);
+        statement.setString(1, studentID);
+        statement.execute();
+        statement.close();
+    }
+
+    /**
+     * Inserts a verification token into the db
+     * @param accountID the account the token is associated with
+     * @param verificationToken the verification token to insert
+     */
+    public void insertVerificationToken(String accountID, String verificationToken) throws SQLException {
+        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_VERIFICATION_TOKEN_SQL);
+        statement.setString(1, accountID);
+        statement.setString(2, verificationToken);
         statement.execute();
         statement.close();
     }
@@ -109,17 +172,6 @@ public class SQLRunner {
         statement.setString(3, unverifiedRoleID);
         statement.setString(4, verifiedRoleID);
         statement.setString(5, guildID);
-        statement.execute();
-        statement.close();
-    }
-
-
-    /**
-     * Creates the database
-     * @throws SQLException thrown if database can't be created.
-     */
-    public void createDatabase() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_DATABASE_SQL);
         statement.execute();
         statement.close();
     }

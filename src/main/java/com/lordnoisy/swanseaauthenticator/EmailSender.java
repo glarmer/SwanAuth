@@ -40,13 +40,15 @@ public class EmailSender {
      * @param studentNumber a swansea based student number
      * @param verificationString a random generated string to use as verification
      */
-    public void sendVerificationEmail(String studentNumber, String verificationString) {
+    public boolean sendVerificationEmail(String studentNumber, String verificationString) {
         String studentEmail = studentNumber + "@swansea.ac.uk";
         String subjectHeader = "Swancord Verification";
         String body = "Hi, your Swancord verification code is: " + verificationString + ". To finish your verification reply to the bot by" +
                 " saying \"$verify " + verificationString + "\"";
 
         this.sendMail(studentEmail,subjectHeader,body);
+
+        return true;
     }
 
     /**
@@ -56,7 +58,6 @@ public class EmailSender {
      * @param content the email content/body
      */
     public void sendMail( String to, String subject, String content ) {
-
         // Set Properties
         Properties props = new Properties();
         props.put( "mail.smtp.auth", "true" );
@@ -79,6 +80,7 @@ public class EmailSender {
                     }
                 }
         );
+        session.setDebug(true);
 
         try {
             //Finally, send the email
@@ -89,11 +91,9 @@ public class EmailSender {
             message.setSubject(subject);
             message.setContent(content, "text/html; charset=utf-8");
             Transport.send(message);
-
         }
-        catch( MessagingException exc ) {
-
-            throw new RuntimeException( exc );
+        catch(MessagingException exc) {
+            exc.printStackTrace();
         }
     }
 }

@@ -30,6 +30,7 @@ public class DatabaseConnector {
         return connection;
     }
 
+
     public Connection getDatabaseConnection() {
         return connection;
     }

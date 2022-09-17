@@ -24,6 +24,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -80,7 +81,7 @@ public class Main {
                 // Make commands
                 ApplicationCommandRequest beginCommand = ApplicationCommandRequest.builder()
                         .name("begin")
-                        .description("Begin the verification process by entering your Student ID.")
+                        .description("Begin the verification process by entering your Student ID")
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("student_id")
                                 .description("Your Student ID")
@@ -91,7 +92,7 @@ public class Main {
 
                 ApplicationCommandRequest verifyCommand = ApplicationCommandRequest.builder()
                         .name("verify")
-                        .description("Begin the verification process by entering your Student ID.")
+                        .description("Finish verifying by entering your verification token :)")
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("verification_code")
                                 .description("The verification code you received via email!")
@@ -102,7 +103,7 @@ public class Main {
 
                 ApplicationCommandRequest setupCommand = ApplicationCommandRequest.builder()
                         .name("setup")
-                        .description("Configure the bot so it can begin verifying users!")
+                        .description("Configure the bot so it can begin verifying users")
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("verification_channel")
                                 .description("The channel that you want the bot to use for verifications.")
@@ -208,29 +209,76 @@ public class Main {
                 gateway.on(new ReactiveEventAdapter() {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
+                        event.deferReply().subscribe();
+                        String result = null;
                         if (event.getCommandName().equals("begin")) {
-                            String result = "Please check your student email for a verification code! When ready use /verify to finish verifying.";
-
-                            String studentNumber = event.getOption("student_number").get().getValue().get().asString();
+                            result = "Please check your student email for a verification code, make sure to check your spam as it might've been sent there. Once you have your code, use /verify to finish verifying.";
+                            String studentNumber = event.getOption("student_id").get().getValue().get().asString();
 
                             if (studentNumber.matches("\\d+")) {
-                                String verificationCode = StringUtilities.getAlphaNumericString(20);
+                                try {
+                                    ResultSet userResults = sqlRunner.selectUser(studentNumber);
+                                    String userID;
+                                    //Check if a user already exists for this student, insert otherwise, and get their ID
+                                    if (!userResults.next()) {
+                                        //There are no rows, so we need to create a user
+                                        userResults.close();
+                                        sqlRunner.insertUser(studentNumber);
 
-                                emailSender.sendVerificationEmail(studentNumber, verificationCode);
+                                        //Run the query again to get the user_id
+                                        userResults = sqlRunner.selectUser(studentNumber);
+                                    }
+
+                                    userID = userResults.getString("user_id");
+                                    userResults.close();
+
+                                    //Get or create account for this studentID and discordID combo
+                                    String discordID = event.getInteraction().getMember().get().getId().asString();
+                                    ResultSet accountResults = sqlRunner.selectAccount(userID, discordID);
+                                    String accountID;
+                                    //Check if a user already exists for this student, insert otherwise, and get their ID
+                                    if (!accountResults.next()) {
+                                        //There are no rows, so we need to create a user
+                                        accountResults.close();
+                                        sqlRunner.insertAccount(userID, discordID);
+
+                                        //Run the query again to get the user_id
+                                        accountResults = sqlRunner.selectAccount(userID, discordID);
+                                    }
+
+                                    accountID = accountResults.getString("account_id");
+                                    accountResults.close();
+                                    //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
+                                    int rows = 0;
+                                    ResultSet verificationTokens = sqlRunner.selectVerificationTokens(accountID);
+                                    while (verificationTokens.next()) {
+                                        rows += 1;
+                                    }
+                                    verificationTokens.close();
+                                    if (rows < 3) {
+                                        String verificationCode = StringUtilities.getAlphaNumericString(20);
+                                        sqlRunner.insertVerificationToken(accountID, verificationCode);
+                                        emailSender.sendVerificationEmail(studentNumber, verificationCode);
+                                    } else {
+                                        result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
+                                    }
+                                } catch (SQLException e) {
+                                    e.printStackTrace();
+                                    result = "There was an error contacting the database, please try again or contact a server admin for help.";
+                                }
                             } else {
                                 result = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
                             }
-
-
-
-                            return event.reply(result);
                         }
                         if (event.getCommandName().equals("verify")) {
-                            String result = "d";
-                            return event.reply(result);
+                            result = "You have successfully verified!";
+                            //TODO: Check if verification token exists for that account
+                            // Enter the user into the verified part of the db
+                            // Delete all tokens for that account
+                            return event.editReply(result);
                         }
                         if (event.getCommandName().equals("setup")) {
-                            String result = "You have successfully configured the bot!";
+                            result = "You have successfully configured the bot!";
 
                             //Get inputs
                             String verificationChannel = event.getOption("verification_channel").get().getValue().get().asString();
@@ -249,7 +297,7 @@ public class Main {
 
                             if (!admin.get()){
                                 result = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
-                                return event.reply(result);
+                                return event.editReply(result);
                             }
 
                             //Validate the inputs
@@ -296,7 +344,7 @@ public class Main {
                                 if (!verifiedRoleValid.get()) {
                                     result = result + "The verified role ID you entered does not seem to exist in this server. ";
                                 }
-                                return event.reply(result);
+                                return event.editReply(result);
                             }
 
                             //Enter the new configuration into the database
@@ -305,7 +353,7 @@ public class Main {
                             } catch (SQLException e) {
                                 e.printStackTrace();
                                 result = "Configuring bot failed, please try again or contact the bot admin.";
-                                return event.reply(result);
+                                return event.editReply(result);
                             }
 
                             //Edit the existing GuildData for this server
@@ -314,14 +362,11 @@ public class Main {
                             guildData.setVerificationChannelID(Snowflake.of(verificationChannel));
                             guildData.setUnverifiedRoleID(Snowflake.of(unverifiedRole));
                             guildData.setVerifiedRoleID(Snowflake.of(verifiedRole));
-
-                            return event.reply(result);
                         }
                         if (event.getCommandName().equals("help")) {
-                            String result = "To begin verification run /verify! Admins can run /setup to configure the bot!";
-                            return event.reply(result);
+                            result = "To begin verification run /verify! Admins can run /setup to configure the bot!";
                         }
-                        return Mono.empty();
+                        return event.editReply(result);
                     }
                 }).blockLast();
 
