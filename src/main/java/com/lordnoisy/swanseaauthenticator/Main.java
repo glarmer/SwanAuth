@@ -210,64 +210,72 @@ public class Main {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
                         event.deferReply().subscribe();
+                        Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                         String result = null;
+                        boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() == null);
+
                         if (event.getCommandName().equals("begin")) {
-                            result = "Please check your student email for a verification code, make sure to check your spam as it might've been sent there. Once you have your code, use /verify to finish verifying.";
-                            String studentNumber = event.getOption("student_id").get().getValue().get().asString();
+                            if (!isServerConfigured) {
+                                //TODO: Check if user is already verified
+                                result = "Please check your student email for a verification code, make sure to check your spam as it might've been sent there. Once you have your code, use /verify to finish verifying.";
+                                String studentNumber = event.getOption("student_id").get().getValue().get().asString();
 
-                            if (studentNumber.matches("\\d+")) {
-                                try {
-                                    ResultSet userResults = sqlRunner.selectUser(studentNumber);
-                                    String userID;
-                                    //Check if a user already exists for this student, insert otherwise, and get their ID
-                                    if (!userResults.next()) {
-                                        //There are no rows, so we need to create a user
+                                if (studentNumber.matches("\\d+")) {
+                                    try {
+                                        ResultSet userResults = sqlRunner.selectUser(studentNumber);
+                                        String userID;
+                                        //Check if a user already exists for this student, insert otherwise, and get their ID
+                                        if (!userResults.next()) {
+                                            //There are no rows, so we need to create a user
+                                            userResults.close();
+                                            sqlRunner.insertUser(studentNumber);
+
+                                            //Run the query again to get the user_id
+                                            userResults = sqlRunner.selectUser(studentNumber);
+                                        }
+
+                                        userID = userResults.getString("user_id");
                                         userResults.close();
-                                        sqlRunner.insertUser(studentNumber);
 
-                                        //Run the query again to get the user_id
-                                        userResults = sqlRunner.selectUser(studentNumber);
-                                    }
+                                        //Get or create account for this studentID and discordID combo
+                                        String discordID = event.getInteraction().getMember().get().getId().asString();
+                                        ResultSet accountResults = sqlRunner.selectAccount(userID, discordID);
+                                        String accountID;
+                                        //Check if a user already exists for this student, insert otherwise, and get their ID
+                                        if (!accountResults.next()) {
+                                            //There are no rows, so we need to create a user
+                                            accountResults.close();
+                                            sqlRunner.insertAccount(userID, discordID);
 
-                                    userID = userResults.getString("user_id");
-                                    userResults.close();
+                                            //Run the query again to get the user_id
+                                            accountResults = sqlRunner.selectAccount(userID, discordID);
+                                        }
 
-                                    //Get or create account for this studentID and discordID combo
-                                    String discordID = event.getInteraction().getMember().get().getId().asString();
-                                    ResultSet accountResults = sqlRunner.selectAccount(userID, discordID);
-                                    String accountID;
-                                    //Check if a user already exists for this student, insert otherwise, and get their ID
-                                    if (!accountResults.next()) {
-                                        //There are no rows, so we need to create a user
+                                        accountID = accountResults.getString("account_id");
                                         accountResults.close();
-                                        sqlRunner.insertAccount(userID, discordID);
-
-                                        //Run the query again to get the user_id
-                                        accountResults = sqlRunner.selectAccount(userID, discordID);
+                                        //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
+                                        int rows = 0;
+                                        ResultSet verificationTokens = sqlRunner.selectVerificationTokens(accountID);
+                                        while (verificationTokens.next()) {
+                                            rows += 1;
+                                        }
+                                        verificationTokens.close();
+                                        if (rows < 3) {
+                                            String verificationCode = StringUtilities.getAlphaNumericString(20);
+                                            sqlRunner.insertVerificationToken(accountID, verificationCode);
+                                            emailSender.sendVerificationEmail(studentNumber, verificationCode);
+                                        } else {
+                                            result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
+                                        }
+                                    } catch (SQLException e) {
+                                        e.printStackTrace();
+                                        result = "There was an error contacting the database, please try again or contact a server admin for help.";
                                     }
-
-                                    accountID = accountResults.getString("account_id");
-                                    accountResults.close();
-                                    //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
-                                    int rows = 0;
-                                    ResultSet verificationTokens = sqlRunner.selectVerificationTokens(accountID);
-                                    while (verificationTokens.next()) {
-                                        rows += 1;
-                                    }
-                                    verificationTokens.close();
-                                    if (rows < 3) {
-                                        String verificationCode = StringUtilities.getAlphaNumericString(20);
-                                        sqlRunner.insertVerificationToken(accountID, verificationCode);
-                                        emailSender.sendVerificationEmail(studentNumber, verificationCode);
-                                    } else {
-                                        result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
-                                    }
-                                } catch (SQLException e) {
-                                    e.printStackTrace();
-                                    result = "There was an error contacting the database, please try again or contact a server admin for help.";
+                                } else {
+                                    result = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
                                 }
                             } else {
-                                result = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
+                                result = "The server admins haven't configured the bot yet, contact them for assistance.";
                             }
                         }
                         if (event.getCommandName().equals("verify")) {
@@ -275,6 +283,7 @@ public class Main {
                             //TODO: Check if verification token exists for that account
                             // Enter the user into the verified part of the db
                             // Delete all tokens for that account
+                            // Check if user is already verified
                             return event.editReply(result);
                         }
                         if (event.getCommandName().equals("setup")) {
@@ -293,7 +302,7 @@ public class Main {
                                     .get()
                                     .getBasePermissions()
                                     .map(perms -> perms.contains(Permission.ADMINISTRATOR))
-                                    .subscribe(hasAdmin -> admin.set(hasAdmin));
+                                    .subscribe(admin::set);
 
                             if (!admin.get()){
                                 result = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
@@ -306,7 +315,6 @@ public class Main {
                             AtomicBoolean unverifiedRoleValid = new AtomicBoolean(false);
                             AtomicBoolean verifiedRoleValid = new AtomicBoolean(false);
 
-                            Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
 
                             if (verificationChannel.matches("\\d+")) {
                                 gateway.getChannelById(Snowflake.of(verificationChannel))
