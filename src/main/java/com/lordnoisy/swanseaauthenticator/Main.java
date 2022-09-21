@@ -7,8 +7,8 @@ import discord4j.core.event.ReactiveEventAdapter;
 import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
-import discord4j.core.event.domain.interaction.DeferrableInteractionEvent;
 import discord4j.core.object.command.ApplicationCommandOption;
+import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
@@ -19,12 +19,9 @@ import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
     private static final String DATABASE_ERROR_MESSAGE = "There was an error contacting the database, please try again or contact a server admin for help.";
@@ -185,6 +182,11 @@ public class Main {
                         String result = null;
                         boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() != null);
                         String discordID = event.getInteraction().getMember().get().getId().asString();
+                        AtomicReference<String> guildName = new AtomicReference<>();
+
+                        event.getInteraction().getGuild()
+                                .map(Guild::getName)
+                                .subscribe(name -> guildName.set(name));
 
                         if (event.getCommandName().equals("begin")) {
                             if (isServerConfigured) {
@@ -203,7 +205,7 @@ public class Main {
                                         if (rows < 3) {
                                             String verificationCode = StringUtilities.getAlphaNumericString(20);
                                             sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
-                                            emailSender.sendVerificationEmail(studentNumber, verificationCode);
+                                            emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
                                         } else {
                                             result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
                                         }

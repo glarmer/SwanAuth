@@ -40,15 +40,14 @@ public class EmailSender {
      * @param studentNumber a swansea based student number
      * @param verificationString a random generated string to use as verification
      */
-    public boolean sendVerificationEmail(String studentNumber, String verificationString) {
+    public boolean sendVerificationEmail(String studentNumber, String verificationString, String guildName) {
         String studentEmail = studentNumber + "@swansea.ac.uk";
-        String subjectHeader = "Swancord Verification";
-        String body = "Hi, your Swancord verification code is: " + verificationString + ". To finish your verification reply to the bot by" +
-                " saying \"$verify " + verificationString + "\"";
+        String subjectHeader = guildName + " Discord Server Verification";
+        String body = "Your verification code for the \"" + guildName + "\" Discord server is: " +
+                verificationString + ".<br><br> To finish your verification, use the /verify command by" +
+                " typing in chat the following: /verify " + verificationString;
 
-        this.sendMail(studentEmail,subjectHeader,body);
-
-        return true;
+        return this.sendMail(studentEmail, subjectHeader, body);
     }
 
     /**
@@ -57,19 +56,15 @@ public class EmailSender {
      * @param subject the subject header
      * @param content the email content/body
      */
-    public void sendMail( String to, String subject, String content ) {
-        // Set Properties
+    public boolean sendMail( String to, String subject, String content ) {
         Properties props = new Properties();
-        props.put( "mail.smtp.auth", "true" );
-        props.put( "mail.smtp.host", host );
-        props.put( "mail.smtp.port", port );
-        props.put( "mail.smtp.starttls.enable", "true" );
-        props.put( "mail.debug", debug );
-        props.put( "mail.smtp.socketFactory.port", port );
-        props.put( "mail.smtp.socketFactory.fallback", "false" );
-        props.put( "mail.smtp.ssl.trust", host );
-
-        //props.put("mail.smtp.socketFactory.class","javax.net.ssl.SSLSocketFactory");
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.host", host);
+        props.put("mail.smtp.port", port);
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.socketFactory.port", port);
+        props.put("mail.smtp.socketFactory.fallback", "false");
+        props.put("mail.smtp.ssl.trust", host);
 
         // Create the Session Object
         Session session = Session.getDefaultInstance(
@@ -83,7 +78,6 @@ public class EmailSender {
         session.setDebug(true);
 
         try {
-            //Finally, send the email
             MimeMessage message = new MimeMessage(session);
             message.setFrom(new InternetAddress(senderEmail));
             message.setReplyTo(InternetAddress.parse(senderEmail));
@@ -91,9 +85,11 @@ public class EmailSender {
             message.setSubject(subject);
             message.setContent(content, "text/html; charset=utf-8");
             Transport.send(message);
+            return true;
         }
         catch(MessagingException exc) {
             exc.printStackTrace();
+            return false;
         }
     }
 }
