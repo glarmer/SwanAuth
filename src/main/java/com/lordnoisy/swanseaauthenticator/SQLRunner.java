@@ -53,6 +53,7 @@ public class SQLRunner {
     final private String SELECT_ACCOUNT_BY_DISCORD_SQL = "SELECT * FROM accounts WHERE discord_id = ?;";
     final private String SELECT_VERIFIED_SQL = "SELECT * FROM verifications WHERE account_id = ? AND guild_id = ?;";
     final private String SELECT_ACCOUNTS_BY_USER_ID_SQL = "SELECT * FROM accounts WHERE user_id = ?;";
+    final private String SELECT_BANNED_SQL = "SELECT * FROM bans WHERE user_id = ? AND guild_id = ?;";
 
     //INSERT Statements
     final private String INSERT_GUILD_SQL = "INSERT INTO guilds (guild_id) VALUES (?);";
@@ -68,6 +69,7 @@ public class SQLRunner {
 
     //Delete Statements
     final private String DELETE_VERIFICATION_TOKENS_SQL = "DELETE FROM verification_tokens WHERE account_id = ? AND guild_id = ?;";
+    final private String DELETE_BAN_SQL = "DELETE FROM bans WHERE user_id = ? AND guild_id = ?;";
 
     final private DataSource DATASOURCE;
 
@@ -110,16 +112,23 @@ public class SQLRunner {
      * @return true if successful, false otherwise
      */
     public boolean deleteVerificationTokens(String accountID, String guildID) {
-        try (Connection connection = DATASOURCE.getDatabaseConnection();
-             PreparedStatement statement = connection.prepareStatement(DELETE_VERIFICATION_TOKENS_SQL)) {
-            statement.setString(1, accountID);
-            statement.setString(2, guildID);
-            statement.execute();
-            return true;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(accountID);
+        parameters.add(guildID);
+        return executeQuery(parameters, DELETE_VERIFICATION_TOKENS_SQL);
+    }
+
+    /**
+     * Delete a ban from the database
+     * @param userID the user to unban
+     * @param guildID the guild to unban them from
+     * @return true on success, false otherwise
+     */
+    public boolean deleteBan(String userID, String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(userID);
+        parameters.add(guildID);
+        return executeQuery(parameters, DELETE_BAN_SQL);
     }
 
     /**
@@ -259,30 +268,57 @@ public class SQLRunner {
     }
 
     /**
-     * Retrieves whether an account is verified
-     * @param accountID the account ID of the user
-     * @return true if verified, false otherwise
+     * Retrieves whether a row is found or not
+     * @param parameters a list of the parameters
+     * @param sql the sql query to run
+     * @return true if exists, false otherwise
      */
-    public boolean isVerified(String accountID, String guildID) {
-        boolean verified = false;
+    public boolean isInTable(ArrayList<String> parameters, String sql) {
+        boolean exists = false;
         try (Connection connection = DATASOURCE.getDatabaseConnection();
-             PreparedStatement statement = connection.prepareStatement(SELECT_VERIFIED_SQL)) {
-            statement.setString(1, accountID);
-            statement.setString(2, guildID);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int i = 0; i < parameters.size(); i++){
+                statement.setString(i + 1, parameters.get(i));
+            }
             try (ResultSet results = statement.executeQuery()) {
                 int rows = 0;
                 while (results.next()) {
                     rows += 1;
                 }
                 if (rows > 0) {
-                    verified = true;
+                    exists = true;
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            return verified;
+            return exists;
         }
-        return verified;
+        return exists;
+    }
+
+    /**
+     * Retrieves whether an account is verified
+     * @param userID the account ID of the user
+     * @param guildID the guild ID
+     * @return true if banned, false otherwise
+     */
+    public boolean isBanned(String userID, String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(userID);
+        parameters.add(guildID);
+        return isInTable(parameters, SELECT_BANNED_SQL);
+    }
+
+    /**
+     * Retrieves whether an account is verified
+     * @param accountID the account ID of the user
+     * @return true if verified, false otherwise
+     */
+    public boolean isVerified(String accountID, String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(accountID);
+        parameters.add(guildID);
+        return isInTable(parameters, SELECT_VERIFIED_SQL);
     }
 
     /**
@@ -343,14 +379,20 @@ public class SQLRunner {
         ArrayList<String> parameters = new ArrayList<>();
         parameters.add(userID);
         parameters.add(discordID);
-        return insert(parameters, INSERT_ACCOUNT_SQL);
+        return executeQuery(parameters, INSERT_ACCOUNT_SQL);
     }
 
+    /**
+     * Put a ban into the database
+     * @param userID user to ban
+     * @param guildID the guild to ban them from
+     * @return
+     */
     public boolean insertBan(String userID, String guildID) {
         ArrayList<String> parameters = new ArrayList<>();
         parameters.add(userID);
         parameters.add(guildID);
-        return insert(parameters, INSERT_BAN_SQL);
+        return executeQuery(parameters, INSERT_BAN_SQL);
     }
 
     /**
@@ -361,7 +403,7 @@ public class SQLRunner {
     public boolean insertGuild(String guildID) {
         ArrayList<String> parameters = new ArrayList<>();
         parameters.add(guildID);
-        return insert(parameters, INSERT_GUILD_SQL);
+        return executeQuery(parameters, INSERT_GUILD_SQL);
     }
 
     /**
@@ -372,7 +414,7 @@ public class SQLRunner {
     public boolean insertUser(String studentID) {
         ArrayList<String> parameters = new ArrayList<>();
         parameters.add(studentID);
-        return insert(parameters, INSERT_USER_SQL);
+        return executeQuery(parameters, INSERT_USER_SQL);
     }
 
     /**
@@ -385,7 +427,7 @@ public class SQLRunner {
         ArrayList<String> parameters = new ArrayList<>();
         parameters.add(accountID);
         parameters.add(guildID);
-        return insert(parameters, INSERT_VERIFICATION_SQL);
+        return executeQuery(parameters, INSERT_VERIFICATION_SQL);
     }
 
     /**
@@ -399,16 +441,16 @@ public class SQLRunner {
         parameters.add(accountID);
         parameters.add(guildID);
         parameters.add(verificationToken);
-        return insert(parameters, INSERT_VERIFICATION_TOKEN_SQL);
+        return executeQuery(parameters, INSERT_VERIFICATION_TOKEN_SQL);
     }
 
     /**
-     * Insert method
+     * Executes a non-resultset returning query
      * @param parameters parameters to insert
      * @param insertSQL the actual SQL
      * @return true on success, false otherwise
      */
-    private boolean insert(ArrayList<String> parameters, String insertSQL) {
+    private boolean executeQuery(ArrayList<String> parameters, String insertSQL) {
         try (Connection connection = DATASOURCE.getDatabaseConnection();
              PreparedStatement statement = connection.prepareStatement(insertSQL)) {
             for (int i = 0; i < parameters.size(); i++) {
@@ -438,7 +480,7 @@ public class SQLRunner {
         parameters.add(unverifiedRoleID);
         parameters.add(verifiedRoleID);
         parameters.add(guildID);
-        return insert(parameters, UPDATE_GUILD_DATA_SQL);
+        return executeQuery(parameters, UPDATE_GUILD_DATA_SQL);
     }
 
     /**

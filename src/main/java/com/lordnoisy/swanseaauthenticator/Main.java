@@ -6,6 +6,7 @@ import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.ReactiveEventAdapter;
 import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
+import discord4j.core.event.domain.guild.UnbanEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.command.ApplicationCommandOption;
 import discord4j.core.object.entity.Guild;
@@ -25,6 +26,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
     private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
+    public static final String SERVER_NOT_CONFIGURED_ERROR = "The server admins haven't configured the bot yet, contact them for assistance.";
+    public static final String ACCOUNT_ALREADY_VERIFIED_ERROR = "This discord account is already verified on this server!";
+    public static final String INSUFFICIENT_PERMISSIONS_ERROR = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -143,8 +147,7 @@ public class Main {
                 }).then();
 
                 //TODO: Test this code works
-                Mono<Void> actOnBan = gateway.on(BanEvent.class, event ->
-                        Mono.fromRunnable(() -> {
+                Mono<Void> actOnBan = gateway.on(BanEvent.class, event -> {
                             String memberID = event.getUser().getId().asString();
                             Account account = sqlRunner.getAccountFromDiscordID(memberID);
 
@@ -152,6 +155,8 @@ public class Main {
                             if (!(account == null)) {
                                 String userID = account.getUserID();
                                 ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
+                                Snowflake guildID = event.getGuildId();
+                                GuildData guildData = guildDataMap.get(guildID);
 
                                 //Ban any alts
                                 for (int i = 0; i < accounts.size(); i++) {
@@ -163,16 +168,54 @@ public class Main {
 
                                     //Insert bans into db
                                     sqlRunner.insertBan(currentAccount.getUserID(), event.getGuildId().asString());
+                                    //TODO: Say in admin channel that we banned x users because ...
                                 }
-                            }
 
-                        })).then();
+                                //TODO: Construct suitable message
+                                return gateway.getChannelById(guildData.getAdminChannelID())
+                                        .flatMap(channel -> channel.getRestChannel().createMessage("Test"))
+                                        .then();
+                            } else {
+                                return Mono.empty();
+                            }
+                        }).then();
+
+                Mono<Void> actOnUnban = gateway.on(UnbanEvent.class, event -> {
+                            String memberID = event.getUser().getId().asString();
+                            Account account = sqlRunner.getAccountFromDiscordID(memberID);
+
+                            //Account will be null if the user never began verification, so we can't do anything
+                            if (!(account == null)) {
+                                String userID = account.getUserID();
+                                ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
+                                Snowflake guildID = event.getGuildId();
+                                GuildData guildData = guildDataMap.get(guildID);
+
+                                //Unban any alts
+                                for (int i = 0; i < accounts.size(); i++) {
+                                    Account currentAccount = accounts.get(i);
+                                    //Ensure we're not trying to unban the account that was just unbanned
+                                    if (!currentAccount.getDiscordID().equals(memberID)) {
+                                        event.getGuild().map(guild -> guild.unban(Snowflake.of(currentAccount.getDiscordID()))).subscribe();
+                                    }
+                                    //Delete bans from db
+                                    sqlRunner.deleteBan(currentAccount.getUserID(), event.getGuildId().asString());
+                                }
+
+                                //TODO: Construct suitable message
+                                return gateway.getChannelById(guildData.getAdminChannelID())
+                                        .flatMap(channel -> channel.getRestChannel().createMessage("Test"))
+                                        .then();
+                            } else {
+                                return Mono.empty();
+                            }
+                        }).then();
+
 
                 //Logic for commands
                 //TODO:
                 // Admin commands? /manualVerify (even though they could just add the role, it makes it more obvious)
                 // Have a help command for users
-                // Have a setup help command for admins
                 // If a banned user tried to verify, ban the account they're trying to verify
                 //TODO : Some logic for unbanning - is there an unban event? - but also allow through command
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
@@ -199,25 +242,32 @@ public class Main {
                                     //TODO: handle error if accountID is null
                                     //TODO: handle error if userID or accountID is null, or rows if -1
                                     String userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
-                                    String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
-                                    if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
-                                        //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
-                                        int rows = sqlRunner.selectRecentVerificationTokens(accountID, guildSnowflake.asString());
-                                        if (rows < 3) {
-                                            String verificationCode = StringUtilities.getAlphaNumericString(20);
-                                            sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
-                                            emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
+                                    if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
+                                        String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
+                                        if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
+                                            //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
+                                            int rows = sqlRunner.selectRecentVerificationTokens(accountID, guildSnowflake.asString());
+                                            if (rows < 3) {
+                                                String verificationCode = StringUtilities.getAlphaNumericString(20);
+                                                sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
+                                                emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
+                                            } else {
+                                                result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
+                                            }
                                         } else {
-                                            result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
+                                            result = ACCOUNT_ALREADY_VERIFIED_ERROR;
                                         }
                                     } else {
-                                        result = "This discord account is already verified on this server!";
+                                        result = "This user has been banned on a different Discord account.";
+                                        Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
+                                        //TODO: Test this works
+                                        return event.editReply(result).and(ban);
                                     }
                                 } else {
                                     result = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
                                 }
                             } else {
-                                result = "The server admins haven't configured the bot yet, contact them for assistance.";
+                                result = SERVER_NOT_CONFIGURED_ERROR;
                             }
                         }
                         if (event.getCommandName().equals("verify")) {
@@ -238,10 +288,10 @@ public class Main {
                                     }
                                     event.getInteraction().getMember().map(member -> member.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID())).get().subscribe();
                                 } else {
-                                    result = "This discord account is already verified on this server!";
+                                    result = ACCOUNT_ALREADY_VERIFIED_ERROR;
                                 }
                             } else {
-                                result = "The server admins haven't configured the bot yet, contact them for assistance.";
+                                result = SERVER_NOT_CONFIGURED_ERROR;
                             }
                             return event.editReply(result);
                         }
@@ -264,7 +314,7 @@ public class Main {
                                     .subscribe(admin::set);
 
                             if (!admin.get()){
-                                result = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
+                                result = INSUFFICIENT_PERMISSIONS_ERROR;
                                 return event.editReply(result);
                             }
 
@@ -335,7 +385,7 @@ public class Main {
                 }).then();
 
                 // combine them!
-                return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnSlashCommand);
+                return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnUnban).and(actOnSlashCommand);
             });
 
             login.block();
