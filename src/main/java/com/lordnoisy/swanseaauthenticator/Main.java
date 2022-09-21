@@ -24,8 +24,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
-    private static final String DATABASE_ERROR_MESSAGE = "There was an error contacting the database, please try again or contact a server admin for help.";
-
     private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
@@ -127,45 +125,47 @@ public class Main {
                     }
                 }).then();
 
-                //TODO : Error handling for is default role is not set, essentially make it do nothing.
                 Mono<Void> actOnJoin = gateway.on(MemberJoinEvent.class, event -> {
                                     Snowflake serverID = event.getGuildId();
                                     GuildData guildData = guildDataMap.get(serverID);
                                     Snowflake unverifiedRoleID = guildData.getUnverifiedRoleID();
                                     Snowflake verificationChannelID = guildData.getVerificationChannelID();
-                                    Member member = event.getMember();
-                                    String memberMention = "<@" + member.getId().asString() + ">";
-
-                                    Mono<Void> addDefaultRoleOnJoin = member.addRole(unverifiedRoleID, "Assign default role on join").then();
-
-                                    Mono<Void> sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
-                                            .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
-
-                                    return addDefaultRoleOnJoin.and(sendWelcomeMessageOnJoin);
+                                    if (unverifiedRoleID == null || verificationChannelID == null) {
+                                        return Mono.empty();
+                                    } else {
+                                        Member member = event.getMember();
+                                        String memberMention = "<@" + member.getId().asString() + ">";
+                                        Mono<Void> addDefaultRoleOnJoin = member.addRole(unverifiedRoleID, "Assign default role on join").then();
+                                        Mono<Void> sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
+                                                .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
+                                        return addDefaultRoleOnJoin.and(sendWelcomeMessageOnJoin);
+                                    }
                 }).then();
 
-                //TODO: Error handling
-                // Test this code works
+                //TODO: Test this code works
                 Mono<Void> actOnBan = gateway.on(BanEvent.class, event ->
                         Mono.fromRunnable(() -> {
                             String memberID = event.getUser().getId().asString();
-
                             Account account = sqlRunner.getAccountFromDiscordID(memberID);
 
-                            String userID = account.getUserID();
-                            ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
+                            //Account will be null if the user never began verification, so we can't do anything
+                            if (!(account == null)) {
+                                String userID = account.getUserID();
+                                ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
 
-                            //Ban any alts
-                            for (int i = 0; i < accounts.size(); i++) {
-                                Account currentAccount = accounts.get(i);
-                                //Ensure we're not trying to ban the account that was just banned
-                                if (!currentAccount.getDiscordID().equals(memberID)) {
-                                    event.getGuild().map(guild -> guild.ban(Snowflake.of(currentAccount.getDiscordID()))).subscribe();
+                                //Ban any alts
+                                for (int i = 0; i < accounts.size(); i++) {
+                                    Account currentAccount = accounts.get(i);
+                                    //Ensure we're not trying to ban the account that was just banned
+                                    if (!currentAccount.getDiscordID().equals(memberID)) {
+                                        event.getGuild().map(guild -> guild.ban(Snowflake.of(currentAccount.getDiscordID()))).subscribe();
+                                    }
+
+                                    //Insert bans into db
+                                    sqlRunner.insertBan(currentAccount.getUserID(), event.getGuildId().asString());
                                 }
-
-                                //Insert bans into db
-                                sqlRunner.insertBan(currentAccount.getUserID(), event.getGuildId().asString());
                             }
+
                         })).then();
 
                 //Logic for commands
@@ -173,6 +173,7 @@ public class Main {
                 // Admin commands? /manualVerify (even though they could just add the role, it makes it more obvious)
                 // Have a help command for users
                 // Have a setup help command for admins
+                // If a banned user tried to verify, ban the account they're trying to verify
                 //TODO : Some logic for unbanning - is there an unban event? - but also allow through command
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
@@ -231,7 +232,6 @@ public class Main {
                                         //TODO: Error handling
                                         String guildID = event.getInteraction().getGuildId().get().asString();
                                         sqlRunner.insertVerification(accountID, guildID);
-                                        //TODO: Add guild ID to query
                                         sqlRunner.deleteVerificationTokens(accountID, guildID);
                                     } else {
                                         result = "The verification token you entered is incorrect, please try again...";
