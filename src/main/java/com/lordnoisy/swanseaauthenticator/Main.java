@@ -7,6 +7,7 @@ import discord4j.core.event.ReactiveEventAdapter;
 import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
+import discord4j.core.event.domain.interaction.DeferrableInteractionEvent;
 import discord4j.core.object.command.ApplicationCommandOption;
 import discord4j.core.object.entity.Member;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
@@ -36,26 +37,8 @@ public class Main {
             String token = args[0];
             DataSource databaseConnector = new DataSource(args[1], args[2], args[3]);
             SQLRunner sqlRunner = new SQLRunner(databaseConnector);
-            EmailSender emailSender = new EmailSender(args[4], Integer.valueOf(args[5]), args[6], args[7], args[8]);
-
-            //TODO: Move to sqlRunner
-            //Check if mysql database is set up, set it up if it isn't.
-            try (Connection connection = databaseConnector.getDatabaseConnection()) {
-                DatabaseMetaData metaData = connection.getMetaData();
-                try (ResultSet tableCheck = metaData.getTables(null, null, "guilds", null);) {
-                    if (tableCheck.next()) {
-                        System.out.println("Database seems to exist... continuing.");
-                    } else {
-                        if (!sqlRunner.firstTimeSetup()) {
-                            System.exit(1);
-                        }
-                        tableCheck.close();
-                    }
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                System.exit(1);
-            }
+            EmailSender emailSender = new EmailSender(args[4], Integer.parseInt(args[5]), args[6], args[7], args[8]);
+            sqlRunner.databaseConfiguredCheck();
 
             // Creates a map containing details of each server stored in the mySQL db
             final Map<Snowflake, GuildData> guildDataMap = new HashMap<>();
@@ -124,10 +107,11 @@ public class Main {
 
                 List<ApplicationCommandRequest> applicationCommandRequestList = List.of(beginCommand, verifyCommand, helpCommand, setupCommand);
 
-                // Check for guilds that are present but not in the map, and thus not in the db. This could happen if they invite the bot when it's offline
-                gateway.getGuilds().doOnEach(guild -> {
+
+                Mono<Void> doOnEachGuild = gateway.getGuilds().doOnEach(guild -> {
                     try {
                         Snowflake guildID = guild.get().getId();
+                        // Check for guilds that are present but not in the map, and thus not in the db. This could happen if they invite the bot when it's offline
                         if (guildDataMap.get(guildID) == null) {
                             sqlRunner.insertGuild(guildID.asString());
                             GuildData guildData = new GuildData(guildID.asString(), null, null, null, null);
@@ -144,13 +128,10 @@ public class Main {
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
                     }
-                }).then().subscribe();
-
-                //TODO : Some logic for unbanning
+                }).then();
 
                 //TODO : Error handling for is default role is not set, essentially make it do nothing.
-                Mono<Void> actOnJoin = gateway.on(MemberJoinEvent.class, event ->
-                                Mono.fromRunnable(() -> {
+                Mono<Void> actOnJoin = gateway.on(MemberJoinEvent.class, event -> {
                                     Snowflake serverID = event.getGuildId();
                                     GuildData guildData = guildDataMap.get(serverID);
                                     Snowflake unverifiedRoleID = guildData.getUnverifiedRoleID();
@@ -158,43 +139,45 @@ public class Main {
                                     Member member = event.getMember();
                                     String memberMention = "<@" + member.getId().asString() + ">";
 
-                                    member.addRole(unverifiedRoleID, "Assign default role on join");
+                                    Mono<Void> addDefaultRoleOnJoin = member.addRole(unverifiedRoleID, "Assign default role on join").then();
 
-                                    gateway.getChannelById(verificationChannelID)
-                                            .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!"))
-                                            .subscribe();
-                                }))
-                        .then();
+                                    Mono<Void> sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
+                                            .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
 
-                //TODO:
-                // Check if the user had any other alts and ban them too
-                // Add them to the database so they may not rejoin and re-verify
-                // The code at activates when a user is banned
+                                    return addDefaultRoleOnJoin.and(sendWelcomeMessageOnJoin);
+                }).then();
+
+                //TODO: Error handling
+                // Test this code works
                 Mono<Void> actOnBan = gateway.on(BanEvent.class, event ->
                         Mono.fromRunnable(() -> {
                             String memberID = event.getUser().getId().asString();
 
                             Account account = sqlRunner.getAccountFromDiscordID(memberID);
 
-                            String accountID = account.getAccountID();
                             String userID = account.getUserID();
+                            ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
 
+                            //Ban any alts
+                            for (int i = 0; i < accounts.size(); i++) {
+                                Account currentAccount = accounts.get(i);
+                                //Ensure we're not trying to ban the account that was just banned
+                                if (!currentAccount.getDiscordID().equals(memberID)) {
+                                    event.getGuild().map(guild -> guild.ban(Snowflake.of(currentAccount.getDiscordID()))).subscribe();
+                                }
 
-                            //TODO:
-                            // Find all accounts verified under the same student ID
-                            //
+                                //Insert bans into db
+                                sqlRunner.insertBan(currentAccount.getUserID(), event.getGuildId().asString());
+                            }
                         })).then();
 
                 //Logic for commands
                 //TODO:
-                // Carry out the verification process
-                // Have good error messages
-                // Assign a blacklisted role to anyone who tries to verify with a banned student ID, or maybe just ban them
-                // The code that is activated when a message is sent
-                // Commands so admins can change the various roles & override
+                // Admin commands? /manualVerify (even though they could just add the role, it makes it more obvious)
                 // Have a help command for users
                 // Have a setup help command for admins
-                gateway.on(new ReactiveEventAdapter() {
+                //TODO : Some logic for unbanning - is there an unban event? - but also allow through command
+                Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
                         event.deferReply().subscribe();
@@ -347,10 +330,10 @@ public class Main {
                         }
                         return event.editReply(result);
                     }
-                }).blockLast();
+                }).then();
 
                 // combine them!
-                return actOnJoin.and(actOnBan);
+                return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnSlashCommand);
             });
 
             login.block();

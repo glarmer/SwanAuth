@@ -52,13 +52,16 @@ public class SQLRunner {
     final private String SELECT_VERIFICATION_TOKEN_SQL = "SELECT * FROM verification_tokens WHERE account_id = ? AND guild_id = ? AND token = ?;";
     final private String SELECT_ACCOUNT_BY_DISCORD_SQL = "SELECT * FROM accounts WHERE discord_id = ?;";
     final private String SELECT_VERIFIED_SQL = "SELECT * FROM verifications WHERE account_id = ? AND guild_id = ?;";
+    final private String SELECT_ACCOUNTS_BY_USER_ID_SQL = "SELECT * FROM accounts WHERE user_id = ?;";
 
     //INSERT Statements
     final private String INSERT_GUILD_SQL = "INSERT INTO guilds (guild_id) VALUES (?);";
     final private String INSERT_VERIFICATION_TOKEN_SQL = "INSERT INTO verification_tokens (account_id, guild_id, token) VALUES (?, ?, ?);";
     final private String INSERT_USER_SQL = "INSERT INTO users (student_id) VALUES (?);";
     final private String INSERT_ACCOUNT_SQL = "INSERT INTO accounts (user_id, discord_id) VALUES (?,?);";
+    final private String INSERT_BAN_SQL = "INSERT INTO bans (user_id, guild_id) VALUES (?,?);";
     final private String INSERT_VERIFICATION_SQL = "INSERT INTO verifications (account_id, guild_id) VALUES (?,?);";
+
 
     //Update Statements
     final private String UPDATE_GUILD_DATA_SQL = "UPDATE guilds SET admin_channel_id = ?, verification_channel_id = ?, unverified_role_id = ?, verified_role_id = ? WHERE guild_id = ?;";
@@ -80,6 +83,25 @@ public class SQLRunner {
     public boolean firstTimeSetup() {
         return (createGuildsTable() && createUsersTable() && createAccountsTable() &&
         createVerificationsTable() && createBansTable() && createVerificationTokensTable());
+    }
+
+    public void databaseConfiguredCheck() {
+        try (Connection connection = DATASOURCE.getDatabaseConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            try (ResultSet tableCheck = metaData.getTables(null, null, "guilds", null);) {
+                if (tableCheck.next()) {
+                    System.out.println("Database seems to exist... continuing.");
+                } else {
+                    if (!this.firstTimeSetup()) {
+                        System.exit(1);
+                    }
+                    tableCheck.close();
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
     }
 
     /**
@@ -184,6 +206,31 @@ public class SQLRunner {
             e.printStackTrace();
             return null;
         }
+    }
+
+    /**
+     * Gets a list of accounts associated with a user
+     * @param userID the user id
+     * @return the list of accounts
+     */
+    public ArrayList<Account> getAccountsFromUserID(String userID) {
+        ArrayList<Account> accounts = new ArrayList<>();
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_ACCOUNTS_BY_USER_ID_SQL)) {
+            statement.setString(1, userID);
+            try (ResultSet results = statement.executeQuery()) {
+                while (results.next()) {
+                    String accountID = results.getString("account_id");
+                    String discordID = results.getString("discord_id");
+
+                    accounts.add(new Account(accountID, userID, discordID));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return accounts;
+        }
+        return accounts;
     }
 
     /**
@@ -297,6 +344,13 @@ public class SQLRunner {
         parameters.add(userID);
         parameters.add(discordID);
         return insert(parameters, INSERT_ACCOUNT_SQL);
+    }
+
+    public boolean insertBan(String userID, String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(userID);
+        parameters.add(guildID);
+        return insert(parameters, INSERT_BAN_SQL);
     }
 
     /**
