@@ -1,6 +1,10 @@
 package com.lordnoisy.swanseaauthenticator;
 
+import discord4j.common.util.Snowflake;
+
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.Map;
 
 public class SQLRunner {
     //Database + Table creation SQL
@@ -34,126 +38,334 @@ public class SQLRunner {
             "FOREIGN KEY (guild_id) REFERENCES guilds(guild_id));";
     final private String CREATE_VERIFICATION_TOKENS_TABLE = "CREATE TABLE verification_tokens(" +
             "account_id int NOT NULL," +
+            "guild_id varchar(255) NOT NULL," +
             "token varchar(20)," +
             "timestamp datetime DEFAULT CURRENT_TIMESTAMP()," +
-            "FOREIGN KEY (account_id) REFERENCES accounts(account_id));";
+            "FOREIGN KEY (account_id) REFERENCES accounts(account_id));" +
+            "FOREIGN KEY (guild_id) REFERENCES guilds(guild_id));";
 
     //SELECT Statements
     final private String SELECT_GUILDS_SQL = "SELECT * FROM guilds;";
-    final private String SELECT_VERIFICATION_TOKENS_SQL = "SELECT * FROM verification_tokens WHERE account_id = ? AND timestamp > now() - interval 12 hour;";
+    final private String SELECT_RECENT_VERIFICATION_TOKENS_SQL = "SELECT * FROM verification_tokens WHERE account_id = ? AND guild_id = ? AND timestamp > now() - interval 12 hour;";
     final private String SELECT_USER_BY_STUDENT_ID_SQL = "SELECT * FROM users WHERE student_id = ?;";
     final private String SELECT_ACCOUNT_BY_USER_AND_DISCORD_SQL = "SELECT * FROM accounts WHERE user_id = ? AND discord_id = ?;";
+    final private String SELECT_VERIFICATION_TOKEN_SQL = "SELECT * FROM verification_tokens WHERE account_id = ? AND guild_id = ? AND token = ?;";
+    final private String SELECT_ACCOUNT_BY_DISCORD_SQL = "SELECT * FROM accounts WHERE discord_id = ?;";
+    final private String SELECT_VERIFIED_SQL = "SELECT * FROM verifications WHERE account_id = ? AND guild_id = ?;";
 
     //INSERT Statements
     final private String INSERT_GUILD_SQL = "INSERT INTO guilds (guild_id) VALUES (?);";
-    final private String INSERT_VERIFICATION_TOKEN_SQL = "INSERT INTO verification_tokens (account_id, token) VALUES (?, ?);";
+    final private String INSERT_VERIFICATION_TOKEN_SQL = "INSERT INTO verification_tokens (account_id, guild_id, token) VALUES (?, ?, ?);";
     final private String INSERT_USER_SQL = "INSERT INTO users (student_id) VALUES (?);";
     final private String INSERT_ACCOUNT_SQL = "INSERT INTO accounts (user_id, discord_id) VALUES (?,?);";
+    final private String INSERT_VERIFICATION_SQL = "INSERT INTO verifications (account_id, guild_id) VALUES (?,?);";
 
     //Update Statements
     final private String UPDATE_GUILD_DATA_SQL = "UPDATE guilds SET admin_channel_id = ?, verification_channel_id = ?, unverified_role_id = ?, verified_role_id = ? WHERE guild_id = ?;";
 
-    final private Connection CONNECTION;
+    //Delete Statements
+    final private String DELETE_VERIFICATION_TOKENS_SQL = "DELETE FROM verification_tokens WHERE account_id = ? AND guild_id = ?;";
 
-    public SQLRunner (Connection connection){
-        this.CONNECTION = connection;
+    final private DataSource DATASOURCE;
+
+    public SQLRunner (DataSource dataSource){
+        this.DATASOURCE = dataSource;
+
     }
 
     /**
      * Perform first time set up of the database
+     * @return true if successful, false otherwise
      */
-    public void firstTimeSetup() {
-        try {
-            createGuildsTable();
-            createUsersTable();
-            createAccountsTable();
-            createVerificationsTable();
-            createBansTable();
-            createVerificationTokensTable();
+    public boolean firstTimeSetup() {
+        return (createGuildsTable() && createUsersTable() && createAccountsTable() &&
+        createVerificationsTable() && createBansTable() && createVerificationTokensTable());
+    }
+
+    /**
+     * Delete all outstanding verification tokens for an account
+     * @param accountID account ID
+     * @return true if successful, false otherwise
+     */
+    public boolean deleteVerificationTokens(String accountID, String guildID) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+             PreparedStatement statement = connection.prepareStatement(DELETE_VERIFICATION_TOKENS_SQL)) {
+            statement.setString(1, accountID);
+            statement.setString(2, guildID);
+            statement.execute();
+            return true;
         } catch (SQLException e) {
             e.printStackTrace();
+            return false;
         }
     }
 
     /**
-     * Retrieves guilds from database
-     * @return guilds
-     * @throws SQLException if query fails
+     * Create and/or get a userID using studentID
+     * @param studentNumber the users student number
+     * @return the user id, null if unsuccessful
      */
-    public ResultSet getGuilds() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_GUILDS_SQL);
-        return statement.executeQuery();
+    public String getOrCreateUserIDFromStudentID(String studentNumber){
+        try (
+        Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(SELECT_USER_BY_STUDENT_ID_SQL)) {
+            statement.setString(1, studentNumber);
+            try (ResultSet userResults = statement.executeQuery()) {
+                String userID;
+                //Check if a user already exists for this student, insert otherwise, and get their ID
+                if (!userResults.next()) {
+                    //There are no rows, so we need to create a user
+                    userResults.close();
+                    this.insertUser(studentNumber);
+
+                    //Run the method again to get the user_id of the freshly created user (I hate this)
+                    userID = this.getOrCreateUserIDFromStudentID(studentNumber);
+                } else {
+                    userID = userResults.getString("user_id");
+                }
+                return userID;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     /**
-     * Select a user by their student ID
-     * @param studentID the user's student ID
-     * @return the results of the query
-     * @throws SQLException if query fails
+     * Get an account ID using both a discordID and a userID, if there isn't an account already - create one.
+     * @param userID the users id
+     * @param discordID the discord account id
+     * @return the account id, null if unsuccessful
      */
-    public ResultSet selectUser(String studentID) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_USER_BY_STUDENT_ID_SQL);
-        statement.setString(1, studentID);
-        return statement.executeQuery();
-    }
+    public String getOrCreateAccountIDFromDiscordIDAndUserID(String userID, String discordID) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(SELECT_ACCOUNT_BY_USER_AND_DISCORD_SQL)) {
+            statement.setString(1, userID);
+            statement.setString(2, discordID);
 
-    public ResultSet selectAccount(String userID, String discordID) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_ACCOUNT_BY_USER_AND_DISCORD_SQL);
-        statement.setString(1, userID);
-        statement.setString(2, discordID);
-        return statement.executeQuery();
+            try (ResultSet accountResults = statement.executeQuery()) {
+                String accountID;
+                //Check if a user already exists for this student, insert otherwise, and get their ID
+                if (!accountResults.next()) {
+                    //There are no rows, so we need to create a user
+                    accountResults.close();
+                    this.insertAccount(userID, discordID);
+
+                    //Run the query again to get the account_id
+                    accountID = getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
+                } else {
+                    accountID = accountResults.getString("account_id");
+                }
+                return accountID;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     /**
-     * Select verification tokens of an account
+     * Get an account ID solely from a Discord ID
+     * @param discordID the discord account id
+     * @return the account id, null if unsuccessful
+     */
+    public Account getAccountFromDiscordID(String discordID) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_ACCOUNT_BY_DISCORD_SQL)) {
+            statement.setString(1, discordID);
+            try (ResultSet accountResults = statement.executeQuery()) {
+                accountResults.next();
+                String accountID = accountResults.getString("account_id");
+                String userID = accountResults.getString("user_id");
+
+                return new Account(accountID, userID, discordID);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Retrieves guilds from database and populates the given map
+     * @param guildDataMap the map to populate
+     * @return true if successful, false if otherwise
+     */
+    public boolean populateGuildMapFromDatabase(Map<Snowflake, GuildData> guildDataMap) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_GUILDS_SQL);
+             ResultSet results = statement.executeQuery()) {
+            while (results.next()) {
+                String currentGuildID = results.getString(1);
+                String currentAdminChannelID = results.getString(2);
+                String currentVerificationChannelID = results.getString(3);
+                String currentUnverifiedRoleID = results.getString(4);
+                String currentVerifiedRoleID = results.getString(5);
+                GuildData guildData = new GuildData(currentGuildID, currentAdminChannelID, currentVerificationChannelID, currentUnverifiedRoleID, currentVerifiedRoleID);
+                guildDataMap.put(Snowflake.of(currentGuildID), guildData);
+            }
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * Retrieves whether an account is verified
+     * @param accountID the account ID of the user
+     * @return true if verified, false otherwise
+     */
+    public boolean isVerified(String accountID, String guildID) {
+        boolean verified = false;
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_VERIFIED_SQL)) {
+            statement.setString(1, accountID);
+            statement.setString(2, guildID);
+            try (ResultSet results = statement.executeQuery()) {
+                int rows = 0;
+                while (results.next()) {
+                    rows += 1;
+                }
+                if (rows > 0) {
+                    verified = true;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return verified;
+        }
+        return verified;
+    }
+
+    /**
+     * Select recent verification tokens of an account
      * @param accountID the account to get associated tokens
-     * @return the results of the query
-     * @throws SQLException if query fails
+     * @return the results of the query, -1 if failure
      */
-    public ResultSet selectVerificationTokens(String accountID) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(SELECT_VERIFICATION_TOKENS_SQL);
-        statement.setString(1, accountID);
-        return statement.executeQuery();
+    public int selectRecentVerificationTokens(String accountID, String guildID) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(SELECT_RECENT_VERIFICATION_TOKENS_SQL)) {
+            statement.setString(1, accountID);
+            statement.setString(2, guildID);
+            try (ResultSet verificationTokens = statement.executeQuery()) {
+                int rows = 0;
+                while (verificationTokens.next()) {
+                    rows += 1;
+                }
+                return rows;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return -1;
+        }
     }
 
-    public void insertAccount(String userID, String discordID) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_ACCOUNT_SQL);
-        statement.setString(1, userID);
-        statement.setString(2, discordID);
-        statement.execute();
-        statement.close();
+    /**
+     * Select verification token of an account
+     * @param accountID the account to get associated tokens
+     * @param token the token to select
+     * @return the results of the query, -1 if failure
+     */
+    public int selectVerificationToken(String accountID, String guildID, String token) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(SELECT_VERIFICATION_TOKEN_SQL)) {
+            statement.setString(1, accountID);
+            statement.setString(2, guildID);
+            statement.setString(3, token);
+            try (ResultSet verificationTokens = statement.executeQuery()) {
+                int rows = 0;
+                while (verificationTokens.next()) {
+                    rows += 1;
+                }
+                return rows;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    /**
+     * Insert an account
+     * @param userID the user id
+     * @param discordID the discord account id
+     * @return true if successful, false if otherwise
+     */
+    public boolean insertAccount(String userID, String discordID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(userID);
+        parameters.add(discordID);
+        return insert(parameters, INSERT_ACCOUNT_SQL);
     }
 
     /**
      * Inserts a guild into the database
      * @param guildID the id of the guild to insert
-     * @throws SQLException if query fails
+     * @return true if successful, false if otherwise
      */
-    public void insertGuild(String guildID) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_GUILD_SQL);
-        statement.setString(1, guildID);
-        statement.execute();
-        statement.close();
+    public boolean insertGuild(String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(guildID);
+        return insert(parameters, INSERT_GUILD_SQL);
     }
 
-    public void insertUser(String studentID) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_USER_SQL);
-        statement.setString(1, studentID);
-        statement.execute();
-        statement.close();
+    /**
+     * Insert a user
+     * @param studentID the user's student ID
+     * @return true if successful, false if otherwise
+     */
+    public boolean insertUser(String studentID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(studentID);
+        return insert(parameters, INSERT_USER_SQL);
+    }
+
+    /**
+     * Insert a verification
+     * @param accountID the accountID
+     * @param guildID the guildID
+     * @return true if successful, false otherwise
+     */
+    public boolean insertVerification(String accountID, String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(accountID);
+        parameters.add(guildID);
+        return insert(parameters, INSERT_VERIFICATION_SQL);
     }
 
     /**
      * Inserts a verification token into the db
      * @param accountID the account the token is associated with
      * @param verificationToken the verification token to insert
+     * @return true if successful, false otherwise
      */
-    public void insertVerificationToken(String accountID, String verificationToken) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(INSERT_VERIFICATION_TOKEN_SQL);
-        statement.setString(1, accountID);
-        statement.setString(2, verificationToken);
-        statement.execute();
-        statement.close();
+    public boolean insertVerificationToken(String accountID, String guildID, String verificationToken) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(accountID);
+        parameters.add(guildID);
+        parameters.add(verificationToken);
+        return insert(parameters, INSERT_VERIFICATION_TOKEN_SQL);
+    }
+
+    /**
+     * Insert method
+     * @param parameters parameters to insert
+     * @param insertSQL the actual SQL
+     * @return true on success, false otherwise
+     */
+    private boolean insert(ArrayList<String> parameters, String insertSQL) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+             PreparedStatement statement = connection.prepareStatement(insertSQL)) {
+            for (int i = 0; i < parameters.size(); i++) {
+                statement.setString(i+1, parameters.get(i));
+            }
+            statement.execute();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
@@ -163,78 +375,107 @@ public class SQLRunner {
      * @param unverifiedRoleID unverified role ID
      * @param verifiedRoleID verified role ID
      * @param guildID the guild ID
-     * @throws SQLException if query fails
+     * @return true if successful, false otherwise
      */
-    public void updateGuildData(String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String guildID) throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(UPDATE_GUILD_DATA_SQL);
-        statement.setString(1, adminChannelID);
-        statement.setString(2, verificationChannelID);
-        statement.setString(3, unverifiedRoleID);
-        statement.setString(4, verifiedRoleID);
-        statement.setString(5, guildID);
-        statement.execute();
-        statement.close();
+    public boolean updateGuildData(String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(adminChannelID);
+        parameters.add(verificationChannelID);
+        parameters.add(unverifiedRoleID);
+        parameters.add(verifiedRoleID);
+        parameters.add(guildID);
+        return insert(parameters, UPDATE_GUILD_DATA_SQL);
     }
 
     /**
      * Creates the guilds table
-     * @throws SQLException thrown if the table can't be created.
+     * @return true if successful, false otherwise
      */
-    public void createGuildsTable() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_GUILDS_TABLE_SQL);
-        statement.execute();
-        statement.close();
+    public boolean createGuildsTable() {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(CREATE_GUILDS_TABLE_SQL)) {
+            statement.execute();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
      * Creates the users table
-     * @throws SQLException thrown if the table can't be created.
+     * @return true if successful, false otherwise
      */
-    public void createUsersTable() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_USERS_TABLE_SQL);
-        statement.execute();
-        statement.close();
+    public boolean createUsersTable() {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(CREATE_USERS_TABLE_SQL)) {
+            statement.execute();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
      * Creates the accounts table
-     * @throws SQLException thrown if the table can't be created.
+     * @return true if successful, false otherwise
      */
-    public void createAccountsTable() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_ACCOUNTS_TABLE_SQL);
-        statement.execute();
-        statement.close();
+    public boolean createAccountsTable() {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(CREATE_ACCOUNTS_TABLE_SQL)) {
+            statement.execute();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
      * Creates the verifications table
-     * @throws SQLException thrown if the table can't be created.
+     * @return true if successful, false otherwise
      */
-    public void createVerificationsTable() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATIONS_TABLE_SQL);
-        statement.execute();
-        statement.close();
+    public boolean createVerificationsTable() {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(CREATE_VERIFICATIONS_TABLE_SQL)) {
+            statement.execute();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
      * Creates the bans table
-     * @throws SQLException thrown if the table can't be created.
+     * @return true if successful, false otherwise
      */
-    public void createBansTable() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_BANS_TABLE_SQL);
-        statement.execute();
-        statement.close();
+    public boolean createBansTable() {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(CREATE_BANS_TABLE_SQL)) {
+            statement.execute();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
      * Creates the verification_tokens table
-     * @throws SQLException thrown if the table can't be created.
+     * @return true if successful, false otherwise
      */
-    public void createVerificationTokensTable() throws SQLException {
-        PreparedStatement statement = CONNECTION.prepareStatement(CREATE_VERIFICATION_TOKENS_TABLE);
+    public boolean createVerificationTokensTable() {
+        try (Connection connection = DATASOURCE.getDatabaseConnection();
+        PreparedStatement statement = connection.prepareStatement(CREATE_VERIFICATION_TOKENS_TABLE)) {
         statement.execute();
-        statement.close();
+        return true;
+    } catch (SQLException e) {
+        e.printStackTrace();
+        return false;
     }
+}
 
 
 }

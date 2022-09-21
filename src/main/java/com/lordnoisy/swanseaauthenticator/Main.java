@@ -8,14 +8,12 @@ import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.command.ApplicationCommandOption;
-import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
 import discord4j.gateway.intent.IntentSet;
 import discord4j.rest.util.Permission;
 import org.reactivestreams.Publisher;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
@@ -24,32 +22,35 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Main {
-    private static final Logger log = Loggers.getLogger(GuildCommandRegistrar.class);
+    private static final String DATABASE_ERROR_MESSAGE = "There was an error contacting the database, please try again or contact a server admin for help.";
+
+    private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
         if (args.length == 9) {
             String token = args[0];
-            DatabaseConnector databaseConnector = new DatabaseConnector(args[1], args[2], args[3]);
-            Connection connection = databaseConnector.getDatabaseConnection();
-            SQLRunner sqlRunner = new SQLRunner(connection);
+            DataSource databaseConnector = new DataSource(args[1], args[2], args[3]);
+            SQLRunner sqlRunner = new SQLRunner(databaseConnector);
             EmailSender emailSender = new EmailSender(args[4], Integer.valueOf(args[5]), args[6], args[7], args[8]);
 
+            //TODO: Move to sqlRunner
             //Check if mysql database is set up, set it up if it isn't.
-            try {
-            DatabaseMetaData metaData = connection.getMetaData();
-            ResultSet tableCheck = metaData.getTables(null, null, "guilds", null);
-                if (tableCheck.next()) {
-                    System.out.println("Database seems to exist... continuing.");
-                }
-                else {
-                    sqlRunner.firstTimeSetup();
-                    tableCheck.close();
+            try (Connection connection = databaseConnector.getDatabaseConnection()) {
+                DatabaseMetaData metaData = connection.getMetaData();
+                try (ResultSet tableCheck = metaData.getTables(null, null, "guilds", null);) {
+                    if (tableCheck.next()) {
+                        System.out.println("Database seems to exist... continuing.");
+                    } else {
+                        if (!sqlRunner.firstTimeSetup()) {
+                            System.exit(1);
+                        }
+                        tableCheck.close();
+                    }
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -58,21 +59,7 @@ public class Main {
 
             // Creates a map containing details of each server stored in the mySQL db
             final Map<Snowflake, GuildData> guildDataMap = new HashMap<>();
-            try {
-                ResultSet results = sqlRunner.getGuilds();
-                while (results.next()) {
-                    String currentGuildID = results.getString(1);
-                    String currentAdminChannelID = results.getString(2);
-                    String currentVerificationChannelID = results.getString(3);
-                    String currentUnverifiedRoleID = results.getString(4);
-                    String currentVerifiedRoleID = results.getString(5);
-                    GuildData guildData = new GuildData(currentGuildID, currentAdminChannelID, currentVerificationChannelID, currentUnverifiedRoleID, currentVerifiedRoleID);
-                    guildDataMap.put(Snowflake.of(currentGuildID), guildData);
-                }
-                results.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
+            sqlRunner.populateGuildMapFromDatabase(guildDataMap);
 
             DiscordClient client = DiscordClient.create(token);
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
@@ -142,7 +129,6 @@ public class Main {
                     try {
                         Snowflake guildID = guild.get().getId();
                         if (guildDataMap.get(guildID) == null) {
-                            System.out.println("Guild ID: "+ guildID.asString());
                             sqlRunner.insertGuild(guildID.asString());
                             GuildData guildData = new GuildData(guildID.asString(), null, null, null, null);
                             guildDataMap.put(guildID, guildData);
@@ -151,15 +137,12 @@ public class Main {
                         // Register commands in each guild
                         GuildCommandRegistrar.create(gateway.getRestClient(), guildID.asLong(), applicationCommandRequestList)
                                 .registerCommands()
-                                .doOnError(e -> log.warn("Unable to create guild command", e))
+                                .doOnError(e -> LOG.warn("Unable to create guild command", e))
                                 .onErrorResume(e -> Mono.empty())
                                 .blockLast();
 
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                        System.out.println("Couldn't insert guild... continuing but there might be issues.");
                     }
                 }).then().subscribe();
 
@@ -190,7 +173,12 @@ public class Main {
                 Mono<Void> actOnBan = gateway.on(BanEvent.class, event ->
                         Mono.fromRunnable(() -> {
                             String memberID = event.getUser().getId().asString();
-                            String memberName0 = event.getUser().getUsername();
+
+                            Account account = sqlRunner.getAccountFromDiscordID(memberID);
+
+                            String accountID = account.getAccountID();
+                            String userID = account.getUserID();
+
 
                             //TODO:
                             // Find all accounts verified under the same student ID
@@ -212,64 +200,32 @@ public class Main {
                         event.deferReply().subscribe();
                         Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                         String result = null;
-                        boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() == null);
+                        boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() != null);
+                        String discordID = event.getInteraction().getMember().get().getId().asString();
 
                         if (event.getCommandName().equals("begin")) {
-                            if (!isServerConfigured) {
-                                //TODO: Check if user is already verified
+                            if (isServerConfigured) {
+
                                 result = "Please check your student email for a verification code, make sure to check your spam as it might've been sent there. Once you have your code, use /verify to finish verifying.";
                                 String studentNumber = event.getOption("student_id").get().getValue().get().asString();
 
                                 if (studentNumber.matches("\\d+")) {
-                                    try {
-                                        ResultSet userResults = sqlRunner.selectUser(studentNumber);
-                                        String userID;
-                                        //Check if a user already exists for this student, insert otherwise, and get their ID
-                                        if (!userResults.next()) {
-                                            //There are no rows, so we need to create a user
-                                            userResults.close();
-                                            sqlRunner.insertUser(studentNumber);
-
-                                            //Run the query again to get the user_id
-                                            userResults = sqlRunner.selectUser(studentNumber);
-                                        }
-
-                                        userID = userResults.getString("user_id");
-                                        userResults.close();
-
-                                        //Get or create account for this studentID and discordID combo
-                                        String discordID = event.getInteraction().getMember().get().getId().asString();
-                                        ResultSet accountResults = sqlRunner.selectAccount(userID, discordID);
-                                        String accountID;
-                                        //Check if a user already exists for this student, insert otherwise, and get their ID
-                                        if (!accountResults.next()) {
-                                            //There are no rows, so we need to create a user
-                                            accountResults.close();
-                                            sqlRunner.insertAccount(userID, discordID);
-
-                                            //Run the query again to get the user_id
-                                            accountResults = sqlRunner.selectAccount(userID, discordID);
-                                        }
-
-                                        accountID = accountResults.getString("account_id");
-                                        accountResults.close();
+                                    //TODO: handle error if accountID is null
+                                    //TODO: handle error if userID or accountID is null, or rows if -1
+                                    String userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
+                                    String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
+                                    if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
                                         //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
-                                        int rows = 0;
-                                        ResultSet verificationTokens = sqlRunner.selectVerificationTokens(accountID);
-                                        while (verificationTokens.next()) {
-                                            rows += 1;
-                                        }
-                                        verificationTokens.close();
+                                        int rows = sqlRunner.selectRecentVerificationTokens(accountID, guildSnowflake.asString());
                                         if (rows < 3) {
                                             String verificationCode = StringUtilities.getAlphaNumericString(20);
-                                            sqlRunner.insertVerificationToken(accountID, verificationCode);
+                                            sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
                                             emailSender.sendVerificationEmail(studentNumber, verificationCode);
                                         } else {
                                             result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
                                         }
-                                    } catch (SQLException e) {
-                                        e.printStackTrace();
-                                        result = "There was an error contacting the database, please try again or contact a server admin for help.";
+                                    } else {
+                                        result = "This discord account is already verified on this server!";
                                     }
                                 } else {
                                     result = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
@@ -279,11 +235,29 @@ public class Main {
                             }
                         }
                         if (event.getCommandName().equals("verify")) {
-                            result = "You have successfully verified!";
-                            //TODO: Check if verification token exists for that account
-                            // Enter the user into the verified part of the db
-                            // Delete all tokens for that account
-                            // Check if user is already verified
+                            String tokenInput = event.getOption("verification_code").get().getValue().get().asString();
+                            if (isServerConfigured) {
+                                result = "You have successfully verified!";
+                                //TODO: handle error if accountID is null, rows if -1
+                                String accountID = sqlRunner.getAccountFromDiscordID(discordID).getAccountID();
+                                if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
+                                    int rows  = sqlRunner.selectVerificationToken(accountID, guildSnowflake.asString(), tokenInput);
+                                    if (rows > 0) {
+                                        //TODO: Error handling
+                                        String guildID = event.getInteraction().getGuildId().get().asString();
+                                        sqlRunner.insertVerification(accountID, guildID);
+                                        //TODO: Add guild ID to query
+                                        sqlRunner.deleteVerificationTokens(accountID, guildID);
+                                    } else {
+                                        result = "The verification token you entered is incorrect, please try again...";
+                                    }
+                                    event.getInteraction().getMember().map(member -> member.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID())).get().subscribe();
+                                } else {
+                                    result = "This discord account is already verified on this server!";
+                                }
+                            } else {
+                                result = "The server admins haven't configured the bot yet, contact them for assistance.";
+                            }
                             return event.editReply(result);
                         }
                         if (event.getCommandName().equals("setup")) {
@@ -356,10 +330,7 @@ public class Main {
                             }
 
                             //Enter the new configuration into the database
-                            try {
-                                sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString());
-                            } catch (SQLException e) {
-                                e.printStackTrace();
+                            if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString())) {
                                 result = "Configuring bot failed, please try again or contact the bot admin.";
                                 return event.editReply(result);
                             }
