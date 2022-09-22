@@ -45,6 +45,7 @@ public class Main {
 
             DiscordClient client = DiscordClient.create(token);
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
+                //TODO: Look into the exact intents I need, since I am no longer reading messages
                 client.gateway().setEnabledIntents(IntentSet.all());
 
                 // Make commands
@@ -129,20 +130,32 @@ public class Main {
                     }
                 }).then();
 
-                //TODO: LOGIC FOR IF USER ALREADY VERIFIED
                 Mono<Void> actOnJoin = gateway.on(MemberJoinEvent.class, event -> {
                     Snowflake serverID = event.getGuildId();
                     GuildData guildData = guildDataMap.get(serverID);
                     Snowflake unverifiedRoleID = guildData.getUnverifiedRoleID();
+                    Snowflake verifiedRoleID = guildData.getVerifiedRoleID();
                     Snowflake verificationChannelID = guildData.getVerificationChannelID();
                     if (unverifiedRoleID == null || verificationChannelID == null) {
                         return Mono.empty();
                     } else {
                         Member member = event.getMember();
                         String memberMention = "<@" + member.getId().asString() + ">";
-                        Mono<Void> addDefaultRoleOnJoin = member.addRole(unverifiedRoleID, "Assign default role on join").then();
-                        Mono<Void> sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
-                                .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
+                        Account account = sqlRunner.getAccountFromDiscordID(member.getId().asString());
+
+                        boolean isVerified = sqlRunner.isVerified(account.getAccountID(), serverID.asString());
+                        Mono<Void> sendWelcomeMessageOnJoin;
+
+                        Mono<Void> addDefaultRoleOnJoin;
+                        if (isVerified) {
+                            addDefaultRoleOnJoin = member.addRole(verifiedRoleID, "Assign verified role on join").then();
+                            sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
+                                    .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + "! I can see that you've already verified here before so I've assigned you the verified role!")).then();
+                        } else {
+                            addDefaultRoleOnJoin = member.addRole(unverifiedRoleID, "Assign default role on join").then();
+                            sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
+                                    .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
+                        }
                         return addDefaultRoleOnJoin.and(sendWelcomeMessageOnJoin);
                     }
                 }).then();
