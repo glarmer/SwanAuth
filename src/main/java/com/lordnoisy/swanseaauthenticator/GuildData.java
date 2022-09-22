@@ -40,6 +40,7 @@ public class GuildData {
     public Snowflake getVerificationChannelID() {
         return verificationChannelID;
     }
+
     public Snowflake getGuildID() {
         return guildID;
     }
