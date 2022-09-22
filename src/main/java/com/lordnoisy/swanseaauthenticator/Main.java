@@ -26,9 +26,25 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
     private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
-    public static final String SERVER_NOT_CONFIGURED_ERROR = "The server admins haven't configured the bot yet, contact them for assistance.";
+
     public static final String ACCOUNT_ALREADY_VERIFIED_ERROR = "This discord account is already verified on this server!";
+    public static final String BEGIN_COMMAND_SUCCESS_RESULT = "Please check your student email for a verification code, make sure to check your spam as it might've been sent there. Once you have your code, use /verify to finish verifying.";
+    public static final String DATABASE_ERROR = "There was an error contacting the database, please try again or contact the bot admin for help";
+    public static final String HELP_COMMAND_SUCCESS = "To begin verification run /verify! Admins can run /setup to configure the bot!";
+    public static final String INCORRECT_COMMANDLINE_ARGUMENTS_ERROR = "You have entered the incorrect amount of command line arguments, please check that your mySQL and Email login is entered correctly.";
+    public static final String INCORRECT_STUDENT_NUMBER_ERROR = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
+    public static final String INCORRECT_TOKEN_ERROR = "The verification token you entered is incorrect, please try again...";
     public static final String INSUFFICIENT_PERMISSIONS_ERROR = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
+    public static final String INVALID_ADMIN_CHANNEL_ERROR = "The admin channel ID you entered does not seem to exist in this server. ";
+    public static final String INVALID_UNVERIFIED_ROLE_ERROR = "The unverified role ID you entered does not seem to exist in this server. ";
+    public static final String INVALID_VERIFICATION_CHANNEL_ERROR = "The verification channel ID you entered does not seem to exist in this server. ";
+    public static final String INVALID_VERIFIED_ROLE_ERROR = "The verified role ID you entered does not seem to exist in this server. ";
+    public static final String SETUP_COMMAND_FAILURE = "Configuring bot failed, please try again or contact the bot admin.";
+    public static final String SETUP_COMMAND_SUCCESS = "You have successfully configured the bot!";
+    public static final String TOO_MANY_ATTEMPTS_ERROR = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
+    public static final String USER_IS_BANNED_RESULT = "This user has been banned on a different Discord account, and so is no longer allowed on this server...";
+    public static final String VERIFY_COMMAND_SUCCESS = "You have successfully verified!";
+    public static final String SERVER_NOT_CONFIGURED_ERROR = "The server admins haven't configured the bot yet, contact them for assistance.";
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -136,6 +152,7 @@ public class Main {
                     Snowflake unverifiedRoleID = guildData.getUnverifiedRoleID();
                     Snowflake verifiedRoleID = guildData.getVerifiedRoleID();
                     Snowflake verificationChannelID = guildData.getVerificationChannelID();
+                    Snowflake adminChannelID = guildData.getAdminChannelID();
                     if (unverifiedRoleID == null || verificationChannelID == null) {
                         return Mono.empty();
                     } else {
@@ -144,19 +161,27 @@ public class Main {
                         Account account = sqlRunner.getAccountFromDiscordID(member.getId().asString());
 
                         boolean isVerified = sqlRunner.isVerified(account.getAccountID(), serverID.asString());
-                        Mono<Void> sendWelcomeMessageOnJoin;
+                        Mono<Void> sendMessageOnJoin;
 
                         Mono<Void> addDefaultRoleOnJoin;
                         if (isVerified) {
-                            addDefaultRoleOnJoin = member.addRole(verifiedRoleID, "Assign verified role on join").then();
-                            sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
-                                    .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + "! I can see that you've already verified here before so I've assigned you the verified role!")).then();
+                            boolean isBanned = sqlRunner.isBanned(account.getUserID(), serverID.asString());
+                            if (!isBanned){
+                                addDefaultRoleOnJoin = member.addRole(verifiedRoleID, "Assign verified role on join").then();
+                                sendMessageOnJoin = gateway.getChannelById(verificationChannelID)
+                                        .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + "! I can see that you've already verified here before so I've assigned you the verified role!")).then();
+                            } else {
+                                Mono<Void> banMemberMono = member.ban().then();
+                                sendMessageOnJoin = gateway.getChannelById(adminChannelID)
+                                        .flatMap(channel -> channel.getRestChannel().createMessage(memberMention + ", who was verified on another account tried to join the server, as a result they have been banned.")).then();
+                                return banMemberMono.and(sendMessageOnJoin);
+                            }
                         } else {
                             addDefaultRoleOnJoin = member.addRole(unverifiedRoleID, "Assign default role on join").then();
-                            sendWelcomeMessageOnJoin = gateway.getChannelById(verificationChannelID)
+                            sendMessageOnJoin = gateway.getChannelById(verificationChannelID)
                                     .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
                         }
-                        return addDefaultRoleOnJoin.and(sendWelcomeMessageOnJoin);
+                        return addDefaultRoleOnJoin.and(sendMessageOnJoin);
                     }
                 }).then();
 
@@ -254,37 +279,43 @@ public class Main {
 
                         if (event.getCommandName().equals("begin")) {
                             if (isServerConfigured) {
-
-                                result = "Please check your student email for a verification code, make sure to check your spam as it might've been sent there. Once you have your code, use /verify to finish verifying.";
+                                result = BEGIN_COMMAND_SUCCESS_RESULT;
                                 String studentNumber = event.getOption("student_id").get().getValue().get().asString();
-
                                 if (studentNumber.matches("\\d+")) {
-                                    //TODO: handle error if accountID is null
-                                    //TODO: handle error if userID or accountID is null, or rows if -1
                                     String userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
-                                    if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
-                                        String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
-                                        if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
-                                            //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
-                                            int rows = sqlRunner.selectRecentVerificationTokens(accountID, guildSnowflake.asString());
-                                            if (rows < 3) {
-                                                String verificationCode = StringUtilities.getAlphaNumericString(20);
-                                                sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
-                                                emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
+                                    if (userID != null) {
+                                        if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
+                                            String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
+                                            if (accountID != null) {
+                                                if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
+                                                    //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
+                                                    int rows = sqlRunner.selectRecentVerificationTokens(accountID, guildSnowflake.asString());
+                                                    if (rows == -1) {
+                                                        result = DATABASE_ERROR;
+                                                    } else if (rows < 3) {
+                                                        String verificationCode = StringUtilities.getAlphaNumericString(20);
+                                                        sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
+                                                        emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
+                                                    } else {
+                                                        result = TOO_MANY_ATTEMPTS_ERROR;
+                                                    }
+                                                } else {
+                                                    result = ACCOUNT_ALREADY_VERIFIED_ERROR;
+                                                }
                                             } else {
-                                                result = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
+                                                result = DATABASE_ERROR;
                                             }
                                         } else {
-                                            result = ACCOUNT_ALREADY_VERIFIED_ERROR;
+                                            result = USER_IS_BANNED_RESULT;
+                                            Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
+                                            //TODO: Test this works
+                                            return event.editReply(result).and(ban);
                                         }
                                     } else {
-                                        result = "This user has been banned on a different Discord account.";
-                                        Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
-                                        //TODO: Test this works
-                                        return event.editReply(result).and(ban);
+                                        result = DATABASE_ERROR;
                                     }
                                 } else {
-                                    result = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
+                                    result = INCORRECT_STUDENT_NUMBER_ERROR;
                                 }
                             } else {
                                 result = SERVER_NOT_CONFIGURED_ERROR;
@@ -293,7 +324,7 @@ public class Main {
                         if (event.getCommandName().equals("verify")) {
                             String tokenInput = event.getOption("verification_code").get().getValue().get().asString();
                             if (isServerConfigured) {
-                                result = "You have successfully verified!";
+                                result = VERIFY_COMMAND_SUCCESS;
                                 //TODO: handle error if accountID is null, rows if -1
                                 String accountID = sqlRunner.getAccountFromDiscordID(discordID).getAccountID();
                                 if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
@@ -304,7 +335,7 @@ public class Main {
                                         sqlRunner.insertVerification(accountID, guildID);
                                         sqlRunner.deleteVerificationTokens(accountID, guildID);
                                     } else {
-                                        result = "The verification token you entered is incorrect, please try again...";
+                                        result = INCORRECT_TOKEN_ERROR;
                                     }
                                     Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
                                             .map(member -> member.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
@@ -326,7 +357,7 @@ public class Main {
                             return event.editReply(result);
                         }
                         if (event.getCommandName().equals("setup")) {
-                            result = "You have successfully configured the bot!";
+                            result = SETUP_COMMAND_SUCCESS;
 
                             //Get inputs
                             String verificationChannel = event.getOption("verification_channel").get().getValue().get().asString();
@@ -380,23 +411,23 @@ public class Main {
                             if (!verificationChannelValid.get() || !adminChannelValid.get() || !unverifiedRoleValid.get() || !verifiedRoleValid.get()) {
                                 result = "";
                                 if (!verificationChannelValid.get()) {
-                                    result = "The verification channel ID you entered does not seem to exist in this server. ";
+                                    result = INVALID_VERIFICATION_CHANNEL_ERROR;
                                 }
                                 if (!adminChannelValid.get()) {
-                                    result = result + "The admin channel ID you entered does not seem to exist in this server. ";
+                                    result = result + INVALID_ADMIN_CHANNEL_ERROR;
                                 }
                                 if (!unverifiedRoleValid.get()) {
-                                    result = result + "The unverified role ID you entered does not seem to exist in this server. ";
+                                    result = result + INVALID_UNVERIFIED_ROLE_ERROR;
                                 }
                                 if (!verifiedRoleValid.get()) {
-                                    result = result + "The verified role ID you entered does not seem to exist in this server. ";
+                                    result = result + INVALID_VERIFIED_ROLE_ERROR;
                                 }
                                 return event.editReply(result);
                             }
 
                             //Enter the new configuration into the database
                             if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString())) {
-                                result = "Configuring bot failed, please try again or contact the bot admin.";
+                                result = SETUP_COMMAND_FAILURE;
                                 return event.editReply(result);
                             }
 
@@ -408,7 +439,7 @@ public class Main {
                             guildData.setVerifiedRoleID(Snowflake.of(verifiedRole));
                         }
                         if (event.getCommandName().equals("help")) {
-                            result = "To begin verification run /verify! Admins can run /setup to configure the bot!";
+                            result = HELP_COMMAND_SUCCESS;
                         }
                         return event.editReply(result);
                     }
@@ -420,7 +451,7 @@ public class Main {
 
             login.block();
         } else {
-          System.out.println("You have entered the incorrect amount of command line arguments, please check that your mySQL and Email login is entered correctly.");
+          System.out.println(INCORRECT_COMMANDLINE_ARGUMENTS_ERROR);
           System.exit(1);
         }
     }
