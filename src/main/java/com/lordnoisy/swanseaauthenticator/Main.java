@@ -203,7 +203,6 @@ public class Main {
                                 banUserMono = banUserMono.and(event.getGuild()
                                         .flatMap(guild -> guild.ban(Snowflake.of(currentAccount.getDiscordID())))
                                         .then());
-
                             }
                         }
 
@@ -259,10 +258,9 @@ public class Main {
 
 
                 //Logic for commands
-                //TODO:
-                // Admin commands? /manualVerify (even though they could just add the role, it makes it more obvious)
-                // Have a help command for users
-                //TODO : unban command for ease
+                //TODO: Admin commands? /manualVerify (even though they could just add the role, it makes it more obvious)
+                //TODO: Have a help command for users
+                //TODO: unban command for ease
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
@@ -308,7 +306,6 @@ public class Main {
                                         } else {
                                             result = USER_IS_BANNED_RESULT;
                                             Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
-                                            //TODO: Test this works
                                             return event.editReply(result).and(ban);
                                         }
                                     } else {
@@ -325,31 +322,35 @@ public class Main {
                             String tokenInput = event.getOption("verification_code").get().getValue().get().asString();
                             if (isServerConfigured) {
                                 result = VERIFY_COMMAND_SUCCESS;
-                                //TODO: handle error if accountID is null, rows if -1
                                 String accountID = sqlRunner.getAccountFromDiscordID(discordID).getAccountID();
-                                if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
-                                    int rows  = sqlRunner.selectVerificationToken(accountID, guildSnowflake.asString(), tokenInput);
-                                    if (rows > 0) {
-                                        //TODO: Error handling
-                                        String guildID = event.getInteraction().getGuildId().get().asString();
-                                        sqlRunner.insertVerification(accountID, guildID);
-                                        sqlRunner.deleteVerificationTokens(accountID, guildID);
+                                if (accountID != null) {
+                                    if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
+                                        int rows = sqlRunner.selectVerificationToken(accountID, guildSnowflake.asString(), tokenInput);
+                                        if (rows > 0) {
+                                            String guildID = event.getInteraction().getGuildId().get().asString();
+                                            sqlRunner.insertVerification(accountID, guildID);
+                                            sqlRunner.deleteVerificationTokens(accountID, guildID);
+                                        } else if (rows == -1) {
+                                            result = DATABASE_ERROR;
+                                        } else {
+                                            result = INCORRECT_TOKEN_ERROR;
+                                        }
+                                        Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
+                                                .map(member -> member.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
+                                                .get()
+                                                .then();
+
+                                        Mono<Void> addVerifiedRoleMono = event.getInteraction().getMember()
+                                                .map(member -> member.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID()))
+                                                .get()
+                                                .then();
+
+                                        return event.editReply(result).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono);
                                     } else {
-                                        result = INCORRECT_TOKEN_ERROR;
+                                        result = ACCOUNT_ALREADY_VERIFIED_ERROR;
                                     }
-                                    Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
-                                            .map(member -> member.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
-                                            .get()
-                                            .then();
-
-                                    Mono<Void> addVerifiedRoleMono = event.getInteraction().getMember()
-                                            .map(member -> member.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID()))
-                                            .get()
-                                            .then();
-
-                                    return event.editReply(result).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono);
                                 } else {
-                                    result = ACCOUNT_ALREADY_VERIFIED_ERROR;
+                                    result = DATABASE_ERROR;
                                 }
                             } else {
                                 result = SERVER_NOT_CONFIGURED_ERROR;
