@@ -1,5 +1,8 @@
 package com.lordnoisy.swanseaauthenticator;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+
 public class StringUtilities {
 
     /**
@@ -19,5 +22,12 @@ public class StringUtilities {
         }
 
         return stringBuilder.toString();
+    }
+
+    public static String getDateTime() {
+        LocalDateTime localDateTime = LocalDateTime.now();
+        String date = localDateTime.toLocalDate().toString();
+        String time = localDateTime.toLocalTime().truncatedTo(ChronoUnit.MINUTES).toString();
+        return date.concat(" | ").concat(time);
     }
 }

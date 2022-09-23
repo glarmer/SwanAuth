@@ -36,6 +36,7 @@ import reactor.util.Logger;
 import reactor.util.Loggers;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -105,6 +106,7 @@ public class Main {
     public static final String TOO_MANY_VERIFICATION_REQUESTS_ERROR = "You already have a pending verification request! Please wait a while...";
 
     //Misc
+    public static final Color EMBED_COLOUR = Color.of(89, 82, 255);
     public static final String FOOTER_ICON_URL = "https://media.discordapp.net/attachments/1020458334882631690/1022266062579974184/SwanAuth.png?width=910&height=910";
     private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
     public static final Integer MAX_VERIFICATION_REQUESTS = 1;
@@ -597,9 +599,9 @@ public class Main {
 
                                         EmbedCreateSpec embed = EmbedCreateSpec.builder()
                                                 .title("A user has requested manual verification!")
-                                                .color(Color.BLUE)
+                                                .color(EMBED_COLOUR)
                                                 .description(memberMention + " gave the following reason: " + reason)
-                                                .footer(EmbedCreateFields.Footer.of("SwanAuth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                .footer(EmbedCreateFields.Footer.of("SwanAuth | " + StringUtilities.getDateTime(), FOOTER_ICON_URL))
                                                 .build();
 
                                         MessageCreateSpec message = MessageCreateSpec.builder()
@@ -665,9 +667,9 @@ public class Main {
 
                                                     EmbedCreateSpec embed = EmbedCreateSpec.builder()
                                                             .title("A user has been accepted for manual verification!")
-                                                            .color(Color.BLUE)
+                                                            .color(EMBED_COLOUR)
                                                             .description(oldEmbed.getDescription().get())
-                                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + StringUtilities.getDateTime(), FOOTER_ICON_URL))
                                                             .build();
 
                                                     MessageEditSpec editSpec = MessageEditSpec.builder()
@@ -687,9 +689,9 @@ public class Main {
 
                                                     EmbedCreateSpec embed = EmbedCreateSpec.builder()
                                                             .title("A user has been denied manual verification!")
-                                                            .color(Color.BLUE)
+                                                            .color(EMBED_COLOUR)
                                                             .description(oldEmbed.getDescription().get())
-                                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + StringUtilities.getDateTime(), FOOTER_ICON_URL))
                                                             .build();
 
                                                     MessageEditSpec editSpec = MessageEditSpec.builder()
