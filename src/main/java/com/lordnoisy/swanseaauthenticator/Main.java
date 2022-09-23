@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
+    public static final String UNVERIFIED_ROLE_OPTION = "unverified_role";
     private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
 
     public static final String ACCOUNT_ALREADY_VERIFIED_ERROR = "This discord account is already verified on this server!";
@@ -73,6 +74,25 @@ public class Main {
     public static final Integer MAX_VERIFICATION_REQUESTS = 1;
     public static final String WAS_BANNED = " was banned";
     public static final String WAS_UNBANNED = " was unbanned";
+    public static final String BEGIN_COMMAND_DESCRIPTION = "Begin the verification process by entering your Student ID";
+    public static final String STUDENT_ID_OPTION = "student_id";
+    public static final String STUDENT_ID_OPTION_DESCRIPTION = "Your Student ID";
+    public static final String VERIFY_COMMAND_DESCRIPTION = "Finish verifying by entering your verification token :)";
+    public static final String VERIFICATION_CODE_OPTION = "verification_code";
+    public static final String VERIFICATION_CODE_OPTION_DESCRIPTION = "The verification code you received via email!";
+    public static final String NON_STUDENT_VERIFY_COMMAND_DESCRIPTION = "Use this to ask for verification if you do not have a student number";
+    public static final String REASON_OPTION = "reason";
+    public static final String REASON_OPTION_DESCRIPTION = "The reason why you need to manually verify, e.g. you are a staff member...";
+    public static final String SETUP_COMMAND_DESCRIPTION = "Configure the bot so it can begin verifying users";
+    public static final String VERIFICATION_CHANNEL_OPTION = "verification_channel";
+    public static final String VERIFICATION_CHANNEL_OPTION_DESCRIPTION = "The channel that you want the bot to use for verifications.";
+    public static final String ADMIN_CHANNEL_OPTION = "admin_channel";
+    public static final String ADMIN_CHANNEL_OPTION_DESCRIPTION = "The channel that you want the bot to use for admin messages.";
+    public static final String UNVERIFIED_ROLE_OPTION_DESCRIPTION = "The unverified role you want to apply to users when they join the server.";
+    public static final String VERIFIED_ROLE_OPTION = "verified_role";
+    public static final String VERIFIED_ROLE_OPTION_DESCRIPTION = "The verified role you want to apply to users after they verify.";
+    public static final String HELP_COMMAND_DESCRIPTION = "Run this command to get help on how to use the bot!";
+    public static final String DEFAULT_ERROR = "An error has occurred, please try again or contact an admin for help";
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -96,10 +116,10 @@ public class Main {
                 // Make commands
                 ApplicationCommandRequest beginCommand = ApplicationCommandRequest.builder()
                         .name(BEGIN_COMMAND_NAME)
-                        .description("Begin the verification process by entering your Student ID")
+                        .description(BEGIN_COMMAND_DESCRIPTION)
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name("student_id")
-                                .description("Your Student ID")
+                                .name(STUDENT_ID_OPTION)
+                                .description(STUDENT_ID_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
                                 .maxLength(255)
                                 .required(true)
@@ -108,10 +128,10 @@ public class Main {
 
                 ApplicationCommandRequest verifyCommand = ApplicationCommandRequest.builder()
                         .name(VERIFY_COMMAND_NAME)
-                        .description("Finish verifying by entering your verification token :)")
+                        .description(VERIFY_COMMAND_DESCRIPTION)
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name("verification_code")
-                                .description("The verification code you received via email!")
+                                .name(VERIFICATION_CODE_OPTION)
+                                .description(VERIFICATION_CODE_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
                                 .maxLength(255)
                                 .required(true)
@@ -120,10 +140,10 @@ public class Main {
 
                 ApplicationCommandRequest nonStudentVerifyCommand = ApplicationCommandRequest.builder()
                         .name(NON_STUDENT_VERIFY_COMMAND_NAME)
-                        .description("Use this to ask for verification if you do not have a student number")
+                        .description(NON_STUDENT_VERIFY_COMMAND_DESCRIPTION)
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name("reason")
-                                .description("The reason why you need to manually verify, e.g. you are a staff member...")
+                                .name(REASON_OPTION)
+                                .description(REASON_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
                                 .maxLength(500)
                                 .required(true)
@@ -132,31 +152,31 @@ public class Main {
 
                 ApplicationCommandRequest setupCommand = ApplicationCommandRequest.builder()
                         .name(SETUP_COMMAND_NAME)
-                        .description("Configure the bot so it can begin verifying users")
+                        .description(SETUP_COMMAND_DESCRIPTION)
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name("verification_channel")
-                                .description("The channel that you want the bot to use for verifications.")
+                                .name(VERIFICATION_CHANNEL_OPTION)
+                                .description(VERIFICATION_CHANNEL_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
                                 .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name("admin_channel")
-                                .description("The channel that you want the bot to use for admin messages.")
+                                .name(ADMIN_CHANNEL_OPTION)
+                                .description(ADMIN_CHANNEL_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
                                 .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name("unverified_role")
-                                .description("The unverified role you want to apply to users when they join the server.")
+                                .name(UNVERIFIED_ROLE_OPTION)
+                                .description(UNVERIFIED_ROLE_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
                                 .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name("verified_role")
-                                .description("The verified role you want to apply to users after they verify.")
+                                .name(VERIFIED_ROLE_OPTION)
+                                .description(VERIFIED_ROLE_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
                                 .maxLength(255)
                                 .required(true)
@@ -165,7 +185,7 @@ public class Main {
 
                 ApplicationCommandRequest helpCommand = ApplicationCommandRequest.builder()
                         .name(HELP_COMMAND_NAME)
-                        .description("Run this command to get help on how to use the bot!")
+                        .description(HELP_COMMAND_DESCRIPTION)
                         .build();
 
                 List<ApplicationCommandRequest> applicationCommandRequestList = List.of(beginCommand, verifyCommand, helpCommand, setupCommand, nonStudentVerifyCommand);
@@ -243,12 +263,14 @@ public class Main {
                             .flatMap(guild -> guild.getAuditLog().withActionType(ActionType.MEMBER_BAN_ADD)
                                     .take(1)
                                     .flatMap(auditLogPart -> {
+                                        //Check that most recent ban was not the bot, otherwise banning a user would trigger the bot to trigger itself again
                                         AuditLogEntry mostRecentBan = auditLogPart.getEntries().get(0);
                                         Snowflake responsibleUser = mostRecentBan.getResponsibleUserId().get();
                                         if(responsibleUser.equals(botSnowflake)) {
                                             return Mono.empty().then();
                                         }
                                         else {
+                                            //Code for if the ban was not the bot
                                             Account account = sqlRunner.getAccountFromDiscordID(memberID);
                                             //Account will be null if the user never began verification, so we can't do anything
                                             if (!(account == null)) {
@@ -300,6 +322,7 @@ public class Main {
                             .flatMap(guild -> guild.getAuditLog().withActionType(ActionType.MEMBER_BAN_REMOVE)
                                     .take(1)
                                     .flatMap(auditLogPart -> {
+                                        //Check that most recent unban was not the bot, otherwise banning a user would trigger the bot to trigger itself again
                                         AuditLogEntry mostRecentBan = auditLogPart.getEntries().get(0);
                                         Snowflake responsibleUser = mostRecentBan.getResponsibleUserId().get();
                                         if(responsibleUser.equals(botSnowflake)) {
@@ -360,55 +383,57 @@ public class Main {
                         String discordID = event.getInteraction().getMember().get().getId().asString();
                         AtomicReference<String> guildName = new AtomicReference<>();
 
-                        event.getInteraction().getGuild()
-                                .map(Guild::getName)
-                                .subscribe(name -> guildName.set(name));
-
                         if (event.getCommandName().equals(BEGIN_COMMAND_NAME)) {
-                            if (isServerConfigured) {
-                                result = BEGIN_COMMAND_SUCCESS_RESULT;
-                                String studentNumber = event.getOption("student_id").get().getValue().get().asString();
-                                if (studentNumber.matches("\\d+")) {
-                                    String userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
-                                    if (userID != null) {
-                                        if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
-                                            String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
-                                            if (accountID != null) {
-                                                if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
-                                                    //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
-                                                    int rows = sqlRunner.selectRecentVerificationTokens(accountID, guildSnowflake.asString());
-                                                    if (rows == -1) {
-                                                        result = DATABASE_ERROR;
-                                                    } else if (rows < 3) {
-                                                        String verificationCode = StringUtilities.getAlphaNumericString(20);
-                                                        sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
-                                                        emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
+                            return event.getInteraction().getGuild()
+                                .map(Guild::getName)
+                                .flatMap(name -> {
+                                    String resultToReturn = DEFAULT_ERROR;
+                                    if (isServerConfigured) {
+                                        resultToReturn = BEGIN_COMMAND_SUCCESS_RESULT;
+                                        String studentNumber = event.getOption(STUDENT_ID_OPTION).get().getValue().get().asString();
+                                        if (studentNumber.matches("\\d+")) {
+                                            String userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
+                                            if (userID != null) {
+                                                if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
+                                                    String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
+                                                    if (accountID != null) {
+                                                        if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
+                                                            //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
+                                                            int rows = sqlRunner.selectRecentVerificationTokens(accountID, guildSnowflake.asString());
+                                                            if (rows == -1) {
+                                                                resultToReturn = DATABASE_ERROR;
+                                                            } else if (rows < 3) {
+                                                                String verificationCode = StringUtilities.getAlphaNumericString(20);
+                                                                sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
+                                                                emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
+                                                            } else {
+                                                                resultToReturn = TOO_MANY_ATTEMPTS_ERROR;
+                                                            }
+                                                        } else {
+                                                            resultToReturn = ACCOUNT_ALREADY_VERIFIED_ERROR;
+                                                        }
                                                     } else {
-                                                        result = TOO_MANY_ATTEMPTS_ERROR;
+                                                        resultToReturn = DATABASE_ERROR;
                                                     }
                                                 } else {
-                                                    result = ACCOUNT_ALREADY_VERIFIED_ERROR;
+                                                    resultToReturn = USER_IS_BANNED_RESULT;
+                                                    Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
+                                                    return event.editReply(resultToReturn).and(ban);
                                                 }
                                             } else {
-                                                result = DATABASE_ERROR;
+                                                resultToReturn = DATABASE_ERROR;
                                             }
                                         } else {
-                                            result = USER_IS_BANNED_RESULT;
-                                            Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
-                                            return event.editReply(result).and(ban);
+                                            resultToReturn = INCORRECT_STUDENT_NUMBER_ERROR;
                                         }
                                     } else {
-                                        result = DATABASE_ERROR;
+                                        resultToReturn = SERVER_NOT_CONFIGURED_ERROR;
                                     }
-                                } else {
-                                    result = INCORRECT_STUDENT_NUMBER_ERROR;
-                                }
-                            } else {
-                                result = SERVER_NOT_CONFIGURED_ERROR;
-                            }
+                                    return event.editReply(resultToReturn);
+                                });
                         }
                         if (event.getCommandName().equals(VERIFY_COMMAND_NAME)) {
-                            String tokenInput = event.getOption("verification_code").get().getValue().get().asString();
+                            String tokenInput = event.getOption(VERIFICATION_CODE_OPTION).get().getValue().get().asString();
                             if (isServerConfigured) {
                                 result = VERIFY_COMMAND_SUCCESS;
                                 String accountID = sqlRunner.getAccountFromDiscordID(discordID).getAccountID();
@@ -450,10 +475,10 @@ public class Main {
                             result = SETUP_COMMAND_SUCCESS;
 
                             //Get inputs
-                            String verificationChannel = event.getOption("verification_channel").get().getValue().get().asString();
-                            String adminChannel = event.getOption("admin_channel").get().getValue().get().asString();
-                            String unverifiedRole = event.getOption("unverified_role").get().getValue().get().asString();
-                            String verifiedRole = event.getOption("verified_role").get().getValue().get().asString();
+                            String verificationChannel = event.getOption(VERIFICATION_CHANNEL_OPTION).get().getValue().get().asString();
+                            String adminChannel = event.getOption(ADMIN_CHANNEL_OPTION).get().getValue().get().asString();
+                            String unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asString();
+                            String verifiedRole = event.getOption(VERIFIED_ROLE_OPTION).get().getValue().get().asString();
 
                             //Validate the inputs
                             AtomicBoolean verificationChannelValid = new AtomicBoolean(false);
@@ -538,7 +563,7 @@ public class Main {
                                 boolean hasVerifiedRole = event.getInteraction().getMember().get().getRoleIds().contains(guildDataMap.get(guildSnowflake).getVerifiedRoleID());
                                 if (!hasVerifiedRole) {
                                     if (manualVerificationsMap.get(memberID) == null || manualVerificationsMap.get(memberID).intValue() < MAX_VERIFICATION_REQUESTS) {
-                                        String reason = event.getOption("reason").get().getValue().get().asString();
+                                        String reason = event.getOption(REASON_OPTION).get().getValue().get().asString();
 
 
                                         Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
@@ -563,12 +588,7 @@ public class Main {
                                                 .ofType(GuildMessageChannel.class)
                                                 .flatMap(channel -> channel.createMessage(message));
 
-                                        Integer currentNumberOfVerifications = manualVerificationsMap.get(memberID);
-                                        if (currentNumberOfVerifications == null) {
-                                            manualVerificationsMap.put(memberID, 1);
-                                        } else {
-                                            manualVerificationsMap.put(memberID, currentNumberOfVerifications + 1);
-                                        }
+                                        manualVerificationsMap.merge(memberID, 1, Integer::sum);
                                         return event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS).and(sendMessageToAdmins);
                                     } else {
                                         return event.editReply(TOO_MANY_VERIFICATION_REQUESTS_ERROR);
@@ -579,6 +599,9 @@ public class Main {
                             } else {
                                 result = SERVER_NOT_CONFIGURED_ERROR;
                             }
+                        }
+                        if (result == null) {
+                            result = DEFAULT_ERROR;
                         }
                         return event.editReply(result);
                     }
