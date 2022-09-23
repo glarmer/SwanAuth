@@ -396,7 +396,6 @@ public class Main {
                         String result = null;
                         boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() != null);
                         String discordID = event.getInteraction().getMember().get().getId().asString();
-                        AtomicReference<String> guildName = new AtomicReference<>();
 
                         if (event.getCommandName().equals(BEGIN_COMMAND_NAME)) {
                             return event.getInteraction().getGuild()
@@ -420,7 +419,7 @@ public class Main {
                                                                 } else if (rows < 3) {
                                                                     String verificationCode = StringUtilities.getAlphaNumericString(20);
                                                                     sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
-                                                                    emailSender.sendVerificationEmail(studentNumber, verificationCode, guildName.get());
+                                                                    emailSender.sendVerificationEmail(studentNumber, verificationCode, name);
                                                                 } else {
                                                                     resultToReturn = TOO_MANY_ATTEMPTS_ERROR;
                                                                 }
