@@ -42,13 +42,55 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
-    public static final String UNVERIFIED_ROLE_OPTION = "unverified_role";
-    private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
 
-    public static final String ACCOUNT_ALREADY_VERIFIED_ERROR = "This discord account is already verified on this server!";
+    //Constants are sorted into groups, and in A-Z order within those groups
+
+    //Command Names
+    public static final String BEGIN_COMMAND_NAME = "begin";
+    public static final String HELP_COMMAND_NAME = "help";
+    public static final String NON_STUDENT_VERIFY_COMMAND_NAME = "nonstudentverify";
+    public static final String SETUP_COMMAND_NAME = "setup";
+    public static final String VERIFY_COMMAND_NAME = "verify";
+
+    //Command Descriptions
+    public static final String BEGIN_COMMAND_DESCRIPTION = "Begin the verification process by entering your Student ID";
+    public static final String HELP_COMMAND_DESCRIPTION = "Run this command to get help on how to use the bot!";
+    public static final String NON_STUDENT_VERIFY_COMMAND_DESCRIPTION = "Use this to ask for verification if you do not have a student number";
+    public static final String SETUP_COMMAND_DESCRIPTION = "Configure the bot so it can begin verifying users";
+    public static final String VERIFY_COMMAND_DESCRIPTION = "Finish verifying by entering your verification token :)";
+
+    //Command Option Names
+    public static final String ADMIN_CHANNEL_OPTION = "admin_channel";
+    public static final String REASON_OPTION = "reason";
+    public static final String STUDENT_ID_OPTION = "student_id";
+    public static final String UNVERIFIED_ROLE_OPTION = "unverified_role";
+    public static final String VERIFICATION_CHANNEL_OPTION = "verification_channel";
+    public static final String VERIFICATION_CODE_OPTION = "verification_code";
+    public static final String VERIFIED_ROLE_OPTION = "verified_role";
+
+    //Command Option Descriptions
+    public static final String ADMIN_CHANNEL_OPTION_DESCRIPTION = "The channel that you want the bot to use for admin messages.";
+    public static final String REASON_OPTION_DESCRIPTION = "The reason why you need to manually verify, e.g. you are a staff member...";
+    public static final String STUDENT_ID_OPTION_DESCRIPTION = "Your Student ID";
+    public static final String UNVERIFIED_ROLE_OPTION_DESCRIPTION = "The unverified role you want to apply to users when they join the server.";
+    public static final String VERIFICATION_CHANNEL_OPTION_DESCRIPTION = "The channel that you want the bot to use for verifications.";
+    public static final String VERIFICATION_CODE_OPTION_DESCRIPTION = "The verification code you received via email!";
+    public static final String VERIFIED_ROLE_OPTION_DESCRIPTION = "The verified role you want to apply to users after they verify.";
+
+    //Results
     public static final String BEGIN_COMMAND_SUCCESS_RESULT = "Please check your student email for a verification code, make sure to check your spam as it might've been sent there. Once you have your code, use /verify to finish verifying.";
-    public static final String DATABASE_ERROR = "There was an error contacting the database, please try again or contact the bot admin for help";
+    public static final String USER_IS_BANNED_RESULT = "This user has been banned on a different Discord account, and so is no longer allowed on this server...";
+
+    //Success Messages
     public static final String HELP_COMMAND_SUCCESS = "To begin verification run /verify! Admins can run /setup to configure the bot!";
+    public static final String MANUAL_VERIFICATION_COMMAND_SUCCESS = "Your manual verification request has been sent to the admins!";
+    public static final String SETUP_COMMAND_SUCCESS = "You have successfully configured the bot!";
+    public static final String VERIFY_COMMAND_SUCCESS = "You have successfully verified!";
+
+    //Errors
+    public static final String ACCOUNT_ALREADY_VERIFIED_ERROR = "This discord account is already verified on this server!";
+    public static final String DATABASE_ERROR = "There was an error contacting the database, please try again or contact the bot admin for help";
+    public static final String DEFAULT_ERROR = "An error has occurred, please try again or contact an admin for help";
     public static final String INCORRECT_COMMANDLINE_ARGUMENTS_ERROR = "You have entered the incorrect amount of command line arguments, please check that your mySQL and Email login is entered correctly.";
     public static final String INCORRECT_STUDENT_NUMBER_ERROR = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
     public static final String INCORRECT_TOKEN_ERROR = "The verification token you entered is incorrect, please try again...";
@@ -57,42 +99,23 @@ public class Main {
     public static final String INVALID_UNVERIFIED_ROLE_ERROR = "The unverified role ID you entered does not seem to exist in this server. ";
     public static final String INVALID_VERIFICATION_CHANNEL_ERROR = "The verification channel ID you entered does not seem to exist in this server. ";
     public static final String INVALID_VERIFIED_ROLE_ERROR = "The verified role ID you entered does not seem to exist in this server. ";
-    public static final String SETUP_COMMAND_FAILURE = "Configuring bot failed, please try again or contact the bot admin.";
-    public static final String SETUP_COMMAND_SUCCESS = "You have successfully configured the bot!";
-    public static final String TOO_MANY_ATTEMPTS_ERROR = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
-    public static final String USER_IS_BANNED_RESULT = "This user has been banned on a different Discord account, and so is no longer allowed on this server...";
-    public static final String VERIFY_COMMAND_SUCCESS = "You have successfully verified!";
     public static final String SERVER_NOT_CONFIGURED_ERROR = "The server admins haven't configured the bot yet, contact them for assistance.";
-    public static final String FOOTER_ICON_URL = "https://media.discordapp.net/attachments/1020458334882631690/1022266062579974184/SwanAuth.png?width=910&height=910";
-    public static final String MANUAL_VERIFICATION_COMMAND_SUCCESS = "Your manual verification request has been sent to the admins!";
-    public static final String NON_STUDENT_VERIFY_COMMAND_NAME = "nonstudentverify";
-    public static final String SETUP_COMMAND_NAME = "setup";
-    public static final String HELP_COMMAND_NAME = "help";
-    public static final String VERIFY_COMMAND_NAME = "verify";
-    public static final String BEGIN_COMMAND_NAME = "begin";
+    public static final String SETUP_COMMAND_ERROR = "Configuring bot failed, please try again or contact the bot admin.";
+    public static final String TOO_MANY_ATTEMPTS_ERROR = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
     public static final String TOO_MANY_VERIFICATION_REQUESTS_ERROR = "You already have a pending verification request! Please wait a while...";
+
+    //Misc
+    public static final String FOOTER_ICON_URL = "https://media.discordapp.net/attachments/1020458334882631690/1022266062579974184/SwanAuth.png?width=910&height=910";
+    private static final Logger LOG = Loggers.getLogger(GuildCommandRegistrar.class);
     public static final Integer MAX_VERIFICATION_REQUESTS = 1;
     public static final String WAS_BANNED = " was banned";
     public static final String WAS_UNBANNED = " was unbanned";
-    public static final String BEGIN_COMMAND_DESCRIPTION = "Begin the verification process by entering your Student ID";
-    public static final String STUDENT_ID_OPTION = "student_id";
-    public static final String STUDENT_ID_OPTION_DESCRIPTION = "Your Student ID";
-    public static final String VERIFY_COMMAND_DESCRIPTION = "Finish verifying by entering your verification token :)";
-    public static final String VERIFICATION_CODE_OPTION = "verification_code";
-    public static final String VERIFICATION_CODE_OPTION_DESCRIPTION = "The verification code you received via email!";
-    public static final String NON_STUDENT_VERIFY_COMMAND_DESCRIPTION = "Use this to ask for verification if you do not have a student number";
-    public static final String REASON_OPTION = "reason";
-    public static final String REASON_OPTION_DESCRIPTION = "The reason why you need to manually verify, e.g. you are a staff member...";
-    public static final String SETUP_COMMAND_DESCRIPTION = "Configure the bot so it can begin verifying users";
-    public static final String VERIFICATION_CHANNEL_OPTION = "verification_channel";
-    public static final String VERIFICATION_CHANNEL_OPTION_DESCRIPTION = "The channel that you want the bot to use for verifications.";
-    public static final String ADMIN_CHANNEL_OPTION = "admin_channel";
-    public static final String ADMIN_CHANNEL_OPTION_DESCRIPTION = "The channel that you want the bot to use for admin messages.";
-    public static final String UNVERIFIED_ROLE_OPTION_DESCRIPTION = "The unverified role you want to apply to users when they join the server.";
-    public static final String VERIFIED_ROLE_OPTION = "verified_role";
-    public static final String VERIFIED_ROLE_OPTION_DESCRIPTION = "The verified role you want to apply to users after they verify.";
-    public static final String HELP_COMMAND_DESCRIPTION = "Run this command to get help on how to use the bot!";
-    public static final String DEFAULT_ERROR = "An error has occurred, please try again or contact an admin for help";
+
+    //Buttons
+    public static final String BUTTON_ACCEPT = "accept";
+    public static final String BUTTON_DENY = "deny";
+    public static final String BUTTON_ID = "swanauth";
+
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -543,7 +566,7 @@ public class Main {
 
                             //Enter the new configuration into the database
                             if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString())) {
-                                result = SETUP_COMMAND_FAILURE;
+                                result = SETUP_COMMAND_ERROR;
                                 return event.editReply(result);
                             }
 
@@ -567,8 +590,8 @@ public class Main {
 
 
                                         Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
-                                        Button acceptButton = Button.success("swanauth:accept:" + memberID, "Accept");
-                                        Button denyButton = Button.danger("swanauth:deny:" + memberID, "Deny");
+                                        Button acceptButton = Button.success(BUTTON_ID + ":" + BUTTON_ACCEPT + ":" + memberID, "Accept");
+                                        Button denyButton = Button.danger(BUTTON_ID + ":" + BUTTON_DENY + ":" + memberID, "Deny");
 
                                         String memberMention = DiscordUtilities.getMention(memberID);
 
@@ -609,7 +632,7 @@ public class Main {
 
 
                 Mono<Void> buttonListener = gateway.on(ButtonInteractionEvent.class, event -> {
-                            if (event.getCustomId().startsWith("swanauth")) {
+                            if (event.getCustomId().startsWith(BUTTON_ID)) {
                                 return event.getInteraction()
                                         .getMember()
                                         .get()
@@ -629,7 +652,7 @@ public class Main {
 
                                                 List<LayoutComponent> layoutComponents = List.of();
                                                 Embed oldEmbed = event.getMessage().get().getEmbeds().get(0);
-                                                if (buttonPressed.equals("accept")) {
+                                                if (buttonPressed.equals(BUTTON_ACCEPT)) {
                                                     Mono<Void> notifyMemberOfResult = gateway.getChannelById(verificationChannel)
                                                             .ofType(GuildMessageChannel.class)
                                                             .flatMap(channel -> channel.createMessage(memberMention + " - Your manual verification has been completed!"))
