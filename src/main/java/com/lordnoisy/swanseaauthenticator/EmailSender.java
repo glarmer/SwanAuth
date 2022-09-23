@@ -1,29 +1,25 @@
 package com.lordnoisy.swanseaauthenticator;
 
-import java.util.Properties;
-
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.PasswordAuthentication;
-import javax.mail.Session;
-import javax.mail.Transport;
+import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
+import java.util.Properties;
 
 public class EmailSender {
-    private String host;
-    private int port;
-    private boolean debug;
-    private String username;
-    private String password;
-    private String senderEmail;
+    private final String host;
+    private final int port;
+    private final boolean debug;
+    private final String username;
+    private final String password;
+    private final String senderEmail;
 
     /**
      * Constructor for EmailSender
-     * @param host the email server
-     * @param port the port
-     * @param username the email address username
-     * @param password the email address password
+     *
+     * @param host        the email server
+     * @param port        the port
+     * @param username    the email address username
+     * @param password    the email address password
      * @param senderEmail the actual email address
      */
     public EmailSender(String host, int port, String username, String password, String senderEmail) {
@@ -37,7 +33,8 @@ public class EmailSender {
 
     /**
      * Send the verification email
-     * @param studentNumber a swansea based student number
+     *
+     * @param studentNumber      a swansea based student number
      * @param verificationString a random generated string to use as verification
      */
     public boolean sendVerificationEmail(String studentNumber, String verificationString, String guildName) {
@@ -52,11 +49,12 @@ public class EmailSender {
 
     /**
      * Send an email
-     * @param to the recipient
+     *
+     * @param to      the recipient
      * @param subject the subject header
      * @param content the email content/body
      */
-    public boolean sendMail( String to, String subject, String content ) {
+    public boolean sendMail(String to, String subject, String content) {
         Properties props = new Properties();
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.host", host);
@@ -71,7 +69,7 @@ public class EmailSender {
                 props,
                 new javax.mail.Authenticator() {
                     protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(username, password );
+                        return new PasswordAuthentication(username, password);
                     }
                 }
         );
@@ -86,8 +84,7 @@ public class EmailSender {
             message.setContent(content, "text/html; charset=utf-8");
             Transport.send(message);
             return true;
-        }
-        catch(MessagingException exc) {
+        } catch (MessagingException exc) {
             exc.printStackTrace();
             return false;
         }

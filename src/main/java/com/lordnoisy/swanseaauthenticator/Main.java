@@ -32,15 +32,11 @@ import discord4j.rest.util.Color;
 import discord4j.rest.util.Permission;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
-import reactor.util.Logger;
-import reactor.util.Loggers;
-import reactor.util.annotation.NonNullApi;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
@@ -253,7 +249,7 @@ public class Main {
                         Mono<Void> addDefaultRoleOnJoin;
                         if (isVerified) {
                             boolean isBanned = sqlRunner.isBanned(account.getUserID(), serverID.asString());
-                            if (!isBanned){
+                            if (!isBanned) {
                                 addDefaultRoleOnJoin = member.addRole(verifiedRoleID, "Assign verified role on join").then();
                                 sendMessageOnJoin = gateway.getChannelById(verificationChannelID)
                                         .ofType(GuildMessageChannel.class)
@@ -295,10 +291,9 @@ public class Main {
                                         //Check that most recent ban was not the bot, otherwise banning a user would trigger the bot to trigger itself again
                                         AuditLogEntry mostRecentBan = auditLogPart.getEntries().get(0);
                                         Snowflake responsibleUser = mostRecentBan.getResponsibleUserId().get();
-                                        if(responsibleUser.equals(botSnowflake)) {
+                                        if (responsibleUser.equals(botSnowflake)) {
                                             return Mono.empty().then();
-                                        }
-                                        else {
+                                        } else {
                                             //Code for if the ban was not the bot
                                             Account account = sqlRunner.getAccountFromDiscordID(memberID);
                                             //Account will be null if the user never began verification, so we can't do anything
@@ -321,7 +316,6 @@ public class Main {
                                                                         .then());
                                                     }
                                                 }
-
 
 
                                                 //Insert ban into db
@@ -355,10 +349,9 @@ public class Main {
                                         //Check that most recent unban was not the bot, otherwise banning a user would trigger the bot to trigger itself again
                                         AuditLogEntry mostRecentBan = auditLogPart.getEntries().get(0);
                                         Snowflake responsibleUser = mostRecentBan.getResponsibleUserId().get();
-                                        if(responsibleUser.equals(botSnowflake)) {
+                                        if (responsibleUser.equals(botSnowflake)) {
                                             return Mono.empty().then();
-                                        }
-                                        else {
+                                        } else {
                                             Account account = sqlRunner.getAccountFromDiscordID(memberID);
                                             //Account will be null if the user never began verification, so we can't do anything
                                             if (!(account == null)) {
@@ -380,7 +373,6 @@ public class Main {
                                                                         .then());
                                                     }
                                                 }
-
 
 
                                                 //Insert ban into db
@@ -570,7 +562,8 @@ public class Main {
                                                                                                                     return event.editReply(SETUP_COMMAND_SUCCESS);
                                                                                                                 } else {
                                                                                                                     return event.editReply(INVALID_VERIFIED_ROLE_ERROR);
-                                                                                                                }});
+                                                                                                                }
+                                                                                                            });
                                                                                                 }
                                                                                                 return event.editReply(INVALID_UNVERIFIED_ROLE_ERROR);
                                                                                             });

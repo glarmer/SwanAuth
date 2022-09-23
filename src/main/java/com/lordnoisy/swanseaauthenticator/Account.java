@@ -1,15 +1,6 @@
 package com.lordnoisy.swanseaauthenticator;
 
-public class Account {
-    private String accountID;
-    private String userID;
-    private String discordID;
-
-    public Account (String accountID, String userID, String discordID) {
-        this.accountID = accountID;
-        this.userID = userID;
-        this.discordID = discordID;
-    }
+public record Account(String accountID, String userID, String discordID) {
 
     public String getAccountID() {
         return accountID;
