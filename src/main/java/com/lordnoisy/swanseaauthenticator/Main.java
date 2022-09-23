@@ -10,6 +10,8 @@ import discord4j.core.event.domain.guild.UnbanEvent;
 import discord4j.core.event.domain.interaction.ButtonInteractionEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.Embed;
+import discord4j.core.object.audit.ActionType;
+import discord4j.core.object.audit.AuditLogEntry;
 import discord4j.core.object.command.ApplicationCommandOption;
 import discord4j.core.object.component.ActionRow;
 import discord4j.core.object.component.Button;
@@ -24,6 +26,7 @@ import discord4j.core.spec.MessageCreateSpec;
 import discord4j.core.spec.MessageEditSpec;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
+import discord4j.gateway.intent.Intent;
 import discord4j.gateway.intent.IntentSet;
 import discord4j.rest.util.Color;
 import discord4j.rest.util.Permission;
@@ -68,6 +71,8 @@ public class Main {
     public static final String BEGIN_COMMAND_NAME = "begin";
     public static final String TOO_MANY_VERIFICATION_REQUESTS_ERROR = "You already have a pending verification request! Please wait a while...";
     public static final Integer MAX_VERIFICATION_REQUESTS = 1;
+    public static final String WAS_BANNED = " was banned";
+    public static final String WAS_UNBANNED = " was unbanned";
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -85,7 +90,8 @@ public class Main {
             sqlRunner.populateGuildMapFromDatabase(guildDataMap);
 
             DiscordClient client = DiscordClient.create(token);
-            Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
+            IntentSet intents = IntentSet.of(Intent.GUILD_BANS, Intent.GUILD_MEMBERS);
+            Mono<Void> login = client.gateway().setEnabledIntents(intents).withGateway((GatewayDiscordClient gateway) -> {
 
                 // Make commands
                 ApplicationCommandRequest beginCommand = ApplicationCommandRequest.builder()
@@ -198,8 +204,9 @@ public class Main {
                         return Mono.empty();
                     } else {
                         Member member = event.getMember();
-                        String memberMention = "<@" + member.getId().asString() + ">";
-                        Account account = sqlRunner.getAccountFromDiscordID(member.getId().asString());
+                        String memberID = member.getId().asString();
+                        String memberMention = DiscordUtilities.getMention(memberID);
+                        Account account = sqlRunner.getAccountFromDiscordID(memberID);
 
                         boolean isVerified = sqlRunner.isVerified(account.getAccountID(), serverID.asString());
                         Mono<Void> sendMessageOnJoin;
@@ -210,17 +217,20 @@ public class Main {
                             if (!isBanned){
                                 addDefaultRoleOnJoin = member.addRole(verifiedRoleID, "Assign verified role on join").then();
                                 sendMessageOnJoin = gateway.getChannelById(verificationChannelID)
-                                        .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + "! I can see that you've already verified here before so I've assigned you the verified role!")).then();
+                                        .ofType(GuildMessageChannel.class)
+                                        .flatMap(channel -> channel.createMessage("Welcome to the server " + memberMention + "! I can see that you've already verified here before so I've assigned you the verified role!")).then();
                             } else {
                                 Mono<Void> banMemberMono = member.ban().then();
                                 sendMessageOnJoin = gateway.getChannelById(adminChannelID)
-                                        .flatMap(channel -> channel.getRestChannel().createMessage(memberMention + ", who was verified on another account tried to join the server, as a result they have been banned.")).then();
+                                        .ofType(GuildMessageChannel.class)
+                                        .flatMap(channel -> channel.createMessage(memberMention + ", who was verified on another account tried to join the server, as a result they have been banned.")).then();
                                 return banMemberMono.and(sendMessageOnJoin);
                             }
                         } else {
                             addDefaultRoleOnJoin = member.addRole(unverifiedRoleID, "Assign default role on join").then();
                             sendMessageOnJoin = gateway.getChannelById(verificationChannelID)
-                                    .flatMap(channel -> channel.getRestChannel().createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
+                                    .ofType(GuildMessageChannel.class)
+                                    .flatMap(channel -> channel.createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
                         }
                         return addDefaultRoleOnJoin.and(sendMessageOnJoin);
                     }
@@ -228,73 +238,116 @@ public class Main {
 
                 Mono<Void> actOnBan = gateway.on(BanEvent.class, event -> {
                     String memberID = event.getUser().getId().asString();
-                    Account account = sqlRunner.getAccountFromDiscordID(memberID);
-                    //Account will be null if the user never began verification, so we can't do anything
-                    if (!(account == null)) {
-                        String userID = account.getUserID();
-                        ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
-                        Snowflake guildID = event.getGuildId();
-                        GuildData guildData = guildDataMap.get(guildID);
-                        //Ban any alts
-                        Mono<Void> banUserMono = Mono.empty();
-                        for (int i = 0; i < accounts.size(); i++) {
-                            Account currentAccount = accounts.get(i);
-                            //Ensure we're not trying to ban the account that was just banned
-                            if (!currentAccount.getDiscordID().equals(memberID)) {
-                                banUserMono = banUserMono.and(event.getGuild()
-                                        .flatMap(guild -> guild.ban(Snowflake.of(currentAccount.getDiscordID())))
-                                        .then());
-                            }
-                        }
+                    Snowflake botSnowflake = gateway.getSelfId();
+                    return event.getGuild()
+                            .flatMap(guild -> guild.getAuditLog().withActionType(ActionType.MEMBER_BAN_ADD)
+                                    .take(1)
+                                    .flatMap(auditLogPart -> {
+                                        AuditLogEntry mostRecentBan = auditLogPart.getEntries().get(0);
+                                        Snowflake responsibleUser = mostRecentBan.getResponsibleUserId().get();
+                                        if(responsibleUser.equals(botSnowflake)) {
+                                            return Mono.empty().then();
+                                        }
+                                        else {
+                                            Account account = sqlRunner.getAccountFromDiscordID(memberID);
+                                            //Account will be null if the user never began verification, so we can't do anything
+                                            if (!(account == null)) {
+                                                String userID = account.getUserID();
+                                                ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
+                                                Snowflake guildID = event.getGuildId();
+                                                GuildData guildData = guildDataMap.get(guildID);
+                                                //Ban any alts
+                                                Mono<Void> banUserMono = Mono.empty();
+                                                for (Account currentAccount : accounts) {
+                                                    //Ensure we're not trying to ban the account that was just banned
+                                                    if (!currentAccount.getDiscordID().equals(memberID)) {
+                                                        banUserMono = banUserMono.and(
+                                                                guild.ban(Snowflake.of(currentAccount.getDiscordID())).onErrorResume(throwable -> {
+                                                                    throwable.printStackTrace();
+                                                                    return gateway.getChannelById(guildData.getAdminChannelID())
+                                                                            .ofType(GuildMessageChannel.class)
+                                                                            .flatMap(channel -> channel.createMessage("Failed to ban: " + DiscordUtilities.getMention(currentAccount.getDiscordID())))
+                                                                            .then();
+                                                                })
+                                                                .then());
+                                                    }
+                                                }
 
-                        //Insert bans into db
-                        sqlRunner.insertBan(userID, event.getGuildId().asString());
+                                                String memberMention = DiscordUtilities.getMention(memberID);
+                                                String message = memberMention + WAS_BANNED;
 
-                        //TODO: Construct suitable message
-                        Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
-                                .flatMap(channel -> channel.getRestChannel().createMessage("Test"))
-                                .then();
+                                                //Insert ban into db
+                                                sqlRunner.insertBan(userID, event.getGuildId().asString());
+                                                Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
+                                                        .ofType(GuildMessageChannel.class)
+                                                        .flatMap(channel -> channel.createMessage(message))
+                                                        .then();
 
-                        return banUserMono.and(sendMessageMono);
-                    } else {
-                        return Mono.empty();
-                    }
+                                                return banUserMono.and(sendMessageMono);
+                                            } else {
+                                                return Mono.empty().then();
+                                            }
+                                        }
+                                    }).then());
+
                 }).then();
 
                 Mono<Void> actOnUnban = gateway.on(UnbanEvent.class, event -> {
                             String memberID = event.getUser().getId().asString();
-                            Account account = sqlRunner.getAccountFromDiscordID(memberID);
 
-                            //Account will be null if the user never began verification, so we can't do anything
-                            if (!(account == null)) {
-                                String userID = account.getUserID();
-                                ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
-                                Snowflake guildID = event.getGuildId();
-                                GuildData guildData = guildDataMap.get(guildID);
+                    Snowflake botSnowflake = gateway.getSelfId();
+                    return event.getGuild()
+                            .flatMap(guild -> guild.getAuditLog().withActionType(ActionType.MEMBER_BAN_REMOVE)
+                                    .take(1)
+                                    .flatMap(auditLogPart -> {
+                                        AuditLogEntry mostRecentBan = auditLogPart.getEntries().get(0);
+                                        Snowflake responsibleUser = mostRecentBan.getResponsibleUserId().get();
+                                        if(responsibleUser.equals(botSnowflake)) {
+                                            return Mono.empty().then();
+                                        }
+                                        else {
+                                            Account account = sqlRunner.getAccountFromDiscordID(memberID);
+                                            //Account will be null if the user never began verification, so we can't do anything
+                                            if (!(account == null)) {
+                                                String userID = account.getUserID();
+                                                ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
+                                                Snowflake guildID = event.getGuildId();
+                                                GuildData guildData = guildDataMap.get(guildID);
+                                                //Ban any alts
+                                                Mono<Void> unbanUserMono = Mono.empty();
+                                                for (Account currentAccount : accounts) {
+                                                    //Ensure we're not trying to ban the account that was just banned
+                                                    if (!currentAccount.getDiscordID().equals(memberID)) {
+                                                        unbanUserMono = unbanUserMono.and(
+                                                                guild.unban(Snowflake.of(currentAccount.getDiscordID())).onErrorResume(throwable -> {
+                                                                            throwable.printStackTrace();
+                                                                            return gateway.getChannelById(guildData.getAdminChannelID())
+                                                                                    .ofType(GuildMessageChannel.class)
+                                                                                    .flatMap(channel -> channel.createMessage("Failed to unban: " + DiscordUtilities.getMention(currentAccount.getDiscordID())))
+                                                                                    .then();
+                                                                        })
+                                                                        .then());
+                                                    }
+                                                }
 
-                                //Unban any alts
-                                Mono<Void> unbanUserMono = Mono.empty();
-                                for (int i = 0; i < accounts.size(); i++) {
-                                    Account currentAccount = accounts.get(i);
-                                    //Ensure we're not trying to unban the account that was just unbanned
-                                    if (!currentAccount.getDiscordID().equals(memberID)) {
-                                        unbanUserMono = unbanUserMono.and(event.getGuild()
-                                                .flatMap(guild -> guild.unban(Snowflake.of(currentAccount.getDiscordID())))
-                                                .then());
-                                    }
-                                    //Delete bans from db
-                                    sqlRunner.deleteBan(currentAccount.getUserID(), event.getGuildId().asString());
-                                }
+                                                String memberMention = DiscordUtilities.getMention(memberID);
+                                                String message = memberMention + WAS_UNBANNED;
 
-                                //TODO: Construct suitable message
-                                Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
-                                        .flatMap(channel -> channel.getRestChannel().createMessage("Test"))
-                                        .then();
+                                                //Insert ban into db
+                                                sqlRunner.deleteBan(userID, guildID.asString());
+                                                Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
+                                                        .ofType(GuildMessageChannel.class)
+                                                        .flatMap(channel -> channel.createMessage(message))
+                                                        .then();
 
-                                return unbanUserMono.and(sendMessageMono);
-                            } else {
-                                return Mono.empty();
-                            }
+                                                return unbanUserMono.and(sendMessageMono);
+                                            } else {
+                                                return Mono.empty().then();
+                                            }
+                                        }
+                                    }).then());
+
+
                         }).then();
 
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
@@ -492,7 +545,7 @@ public class Main {
                                         Button acceptButton = Button.success("swanauth:accept:" + memberID, "Accept");
                                         Button denyButton = Button.danger("swanauth:deny:" + memberID, "Deny");
 
-                                        String memberMention = "<@" + memberID + ">";
+                                        String memberMention = DiscordUtilities.getMention(memberID);
 
                                         EmbedCreateSpec embed = EmbedCreateSpec.builder()
                                                 .title("A user has requested manual verification!")
@@ -543,8 +596,9 @@ public class Main {
                                             if (hasAdmin) {
                                                 String[] buttonInfo = event.getCustomId().split(":");
                                                 String buttonPressed = buttonInfo[1];
-                                                Snowflake memberID = Snowflake.of(buttonInfo[2]);
-                                                String memberMention = "<@" + memberID.asString() + ">";
+                                                Snowflake memberSnowflake = Snowflake.of(buttonInfo[2]);
+                                                String memberID = memberSnowflake.asString();
+                                                String memberMention = DiscordUtilities.getMention(memberID);
                                                 Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                                                 Snowflake verifiedRole = guildDataMap.get(guildSnowflake).getVerifiedRoleID();
                                                 Snowflake verificationChannel = guildDataMap.get(guildSnowflake).getVerificationChannelID();
@@ -559,7 +613,7 @@ public class Main {
                                                             .then();
 
                                                     Mono<Void> giveMemberVerifiedRole = event.getInteraction().getGuild()
-                                                            .flatMap(guild -> guild.getMemberById(memberID))
+                                                            .flatMap(guild -> guild.getMemberById(memberSnowflake))
                                                             .flatMap(member -> member.addRole(verifiedRole));
 
 
@@ -567,7 +621,7 @@ public class Main {
                                                             .title("A user has been accepted for manual verification!")
                                                             .color(Color.BLUE)
                                                             .description(oldEmbed.getDescription().get())
-                                                            .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + LocalDateTime.now(), FOOTER_ICON_URL))
                                                             .build();
 
                                                     MessageEditSpec editSpec = MessageEditSpec.builder()
@@ -577,7 +631,7 @@ public class Main {
 
                                                     Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
 
-                                                    manualVerificationsMap.remove(memberID.asString());
+                                                    manualVerificationsMap.remove(memberSnowflake.asString());
                                                     return event.reply("The user has been verified successfully!").withEphemeral(true).and(notifyMemberOfResult).then(giveMemberVerifiedRole).and(removeButtons);
                                                 } else {
                                                     Mono<Void> notifyMemberOfResult = gateway.getChannelById(verificationChannel)
@@ -589,7 +643,7 @@ public class Main {
                                                             .title("A user has been denied manual verification!")
                                                             .color(Color.BLUE)
                                                             .description(oldEmbed.getDescription().get())
-                                                            .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + LocalDateTime.now(), FOOTER_ICON_URL))
                                                             .build();
 
                                                     MessageEditSpec editSpec = MessageEditSpec.builder()
@@ -599,7 +653,7 @@ public class Main {
 
                                                     Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
 
-                                                    manualVerificationsMap.remove(memberID.asString());
+                                                    manualVerificationsMap.remove(memberSnowflake.asString());
                                                     return event.reply("The user has been denied manual verification and notified accordingly").withEphemeral(true).and(notifyMemberOfResult).and(removeButtons);
                                                 }
                                             } else {
