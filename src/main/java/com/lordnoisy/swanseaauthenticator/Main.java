@@ -9,9 +9,11 @@ import discord4j.core.event.domain.guild.MemberJoinEvent;
 import discord4j.core.event.domain.guild.UnbanEvent;
 import discord4j.core.event.domain.interaction.ButtonInteractionEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
+import discord4j.core.object.Embed;
 import discord4j.core.object.command.ApplicationCommandOption;
 import discord4j.core.object.component.ActionRow;
 import discord4j.core.object.component.Button;
+import discord4j.core.object.component.LayoutComponent;
 import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.Message;
@@ -19,6 +21,7 @@ import discord4j.core.object.entity.channel.GuildMessageChannel;
 import discord4j.core.spec.EmbedCreateFields;
 import discord4j.core.spec.EmbedCreateSpec;
 import discord4j.core.spec.MessageCreateSpec;
+import discord4j.core.spec.MessageEditSpec;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
 import discord4j.gateway.intent.IntentSet;
@@ -29,6 +32,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
+import javax.swing.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
@@ -509,15 +513,84 @@ public class Main {
                     }
                 }).then();
 
+
                 Mono<Void> buttonListener = gateway.on(ButtonInteractionEvent.class, event -> {
                             if (event.getCustomId().startsWith("swanauth")) {
-                                return event.reply("You clicked me!").withEphemeral(true);
-                            } else {
-                                // Ignore it
-                                return Mono.empty();
-                            }
-                        })
-                        .then(); //Transform the flux to a mono
+                                return event.getInteraction()
+                                        .getMember()
+                                        .get()
+                                        .getBasePermissions()
+                                        .map(perms -> perms.contains(Permission.ADMINISTRATOR))
+                                        .flatMap(hasAdmin -> {
+                                            if (hasAdmin) {
+                                                String[] buttonInfo = event.getCustomId().split(":");
+                                                String buttonPressed = buttonInfo[1];
+                                                Snowflake memberID = Snowflake.of(buttonInfo[2]);
+                                                String memberMention = "<@" + memberID.asString() + ">";
+                                                Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
+                                                Snowflake verifiedRole = guildDataMap.get(guildSnowflake).getVerifiedRoleID();
+                                                Snowflake verificationChannel = guildDataMap.get(guildSnowflake).getVerificationChannelID();
+
+
+                                                List<LayoutComponent> layoutComponents = List.of();
+                                                Embed oldEmbed = event.getMessage().get().getEmbeds().get(0);
+                                                if (buttonPressed.equals("accept")) {
+                                                    Mono<Void> notifyMemberOfResult = gateway.getChannelById(verificationChannel)
+                                                            .ofType(GuildMessageChannel.class)
+                                                            .flatMap(channel -> channel.createMessage(memberMention + " - Your manual verification has been completed!"))
+                                                            .then();
+
+                                                    Mono<Void> giveMemberVerifiedRole = event.getInteraction().getGuild()
+                                                            .flatMap(guild -> guild.getMemberById(memberID))
+                                                            .flatMap(member -> member.addRole(verifiedRole));
+
+
+                                                    EmbedCreateSpec embed = EmbedCreateSpec.builder()
+                                                            .title("A user has been accepted for manual verification!")
+                                                            .color(Color.BLUE)
+                                                            .description(oldEmbed.getDescription().get())
+                                                            .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                            .build();
+
+                                                    MessageEditSpec editSpec = MessageEditSpec.builder()
+                                                            .components(layoutComponents)
+                                                            .embeds(List.of(embed))
+                                                            .build();
+
+                                                    Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
+
+                                                    return event.reply("The user has been verified successfully!").withEphemeral(true).and(notifyMemberOfResult).then(giveMemberVerifiedRole).and(removeButtons);
+                                                } else {
+                                                    Mono<Void> notifyMemberOfResult = gateway.getChannelById(verificationChannel)
+                                                            .ofType(GuildMessageChannel.class)
+                                                            .flatMap(channel -> channel.createMessage(memberMention + " - Your manual verification has been denied, if you think this in an error please contact a server admin."))
+                                                            .then();
+
+                                                    EmbedCreateSpec embed = EmbedCreateSpec.builder()
+                                                            .title("A user has been denied manual verification!")
+                                                            .color(Color.BLUE)
+                                                            .description(oldEmbed.getDescription().get())
+                                                            .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                            .build();
+
+                                                    MessageEditSpec editSpec = MessageEditSpec.builder()
+                                                            .components(layoutComponents)
+                                                            .embeds(List.of(embed))
+                                                            .build();
+
+                                                    Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
+
+                                                    return event.reply("The user has been denied manual verification and notified accordingly").withEphemeral(true).and(notifyMemberOfResult).and(removeButtons);
+                                                }
+                                            } else {
+                                                return event.reply(INSUFFICIENT_PERMISSIONS_ERROR).withEphemeral(true);
+                                            }
+                                        });
+                                } else {
+                                    // Ignore it
+                                    return Mono.empty();
+                                }
+                        }).then();
 
                 // combine them!
                 return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnUnban).and(actOnSlashCommand).and(buttonListener);
