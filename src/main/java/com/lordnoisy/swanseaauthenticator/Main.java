@@ -32,7 +32,6 @@ import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
-import javax.swing.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
@@ -67,6 +66,8 @@ public class Main {
     public static final String HELP_COMMAND_NAME = "help";
     public static final String VERIFY_COMMAND_NAME = "verify";
     public static final String BEGIN_COMMAND_NAME = "begin";
+    public static final String TOO_MANY_VERIFICATION_REQUESTS_ERROR = "You already have a pending verification request! Please wait a while...";
+    public static final Integer MAX_VERIFICATION_REQUESTS = 1;
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -79,12 +80,12 @@ public class Main {
 
             // Creates a map containing details of each server stored in the mySQL db
             final Map<Snowflake, GuildData> guildDataMap = new HashMap<>();
+            final Map<String, Integer> manualVerificationsMap = new HashMap<>();
+
             sqlRunner.populateGuildMapFromDatabase(guildDataMap);
 
             DiscordClient client = DiscordClient.create(token);
             Mono<Void> login = DiscordClient.create(token).gateway().setEnabledIntents(IntentSet.all()).withGateway((GatewayDiscordClient gateway) -> {
-                //TODO: Look into the exact intents I need, since I am no longer reading messages
-                client.gateway().setEnabledIntents(IntentSet.all());
 
                 // Make commands
                 ApplicationCommandRequest beginCommand = ApplicationCommandRequest.builder()
@@ -118,7 +119,7 @@ public class Main {
                                 .name("reason")
                                 .description("The reason why you need to manually verify, e.g. you are a staff member...")
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
-                                .maxLength(4000)
+                                .maxLength(500)
                                 .required(true)
                                 .build())
                         .build();
@@ -299,7 +300,7 @@ public class Main {
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
-                        event.deferReply().subscribe();
+                        event.deferReply().withEphemeral(true).subscribe();
                         Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                         String result = null;
                         boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() != null);
@@ -479,37 +480,47 @@ public class Main {
                             result = HELP_COMMAND_SUCCESS;
                         }
                         if (event.getCommandName().equals(NON_STUDENT_VERIFY_COMMAND_NAME)) {
+                            //TODO: Prevent user from spamming this
+                            String memberID = event.getInteraction().getMember().get().getId().asString();
                             if (isServerConfigured) {
-
                                 boolean hasVerifiedRole = event.getInteraction().getMember().get().getRoleIds().contains(guildDataMap.get(guildSnowflake).getVerifiedRoleID());
-
                                 if (!hasVerifiedRole) {
-                                    String reason = event.getOption("reason").get().getValue().get().asString();
-                                    String memberID = event.getInteraction().getMember().get().getId().asString();
+                                    if (manualVerificationsMap.get(memberID) == null || manualVerificationsMap.get(memberID).intValue() < MAX_VERIFICATION_REQUESTS) {
+                                        String reason = event.getOption("reason").get().getValue().get().asString();
 
-                                    Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
-                                    Button acceptButton = Button.success("swanauth:accept:" + memberID, "Accept");
-                                    Button denyButton = Button.danger("swanauth:deny:" + memberID, "Deny");
 
-                                    String memberMention = "<@" + memberID + ">";
+                                        Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
+                                        Button acceptButton = Button.success("swanauth:accept:" + memberID, "Accept");
+                                        Button denyButton = Button.danger("swanauth:deny:" + memberID, "Deny");
 
-                                    EmbedCreateSpec embed = EmbedCreateSpec.builder()
-                                            .title("A user has requested manual verification!")
-                                            .color(Color.BLUE)
-                                            .description(memberMention + " gave the following reason: " + reason)
-                                            .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
-                                            .build();
+                                        String memberMention = "<@" + memberID + ">";
 
-                                    MessageCreateSpec message = MessageCreateSpec.builder()
-                                            .addEmbed(embed)
-                                            .addComponent(ActionRow.of(acceptButton, denyButton))
-                                            .build();
+                                        EmbedCreateSpec embed = EmbedCreateSpec.builder()
+                                                .title("A user has requested manual verification!")
+                                                .color(Color.BLUE)
+                                                .description(memberMention + " gave the following reason: " + reason)
+                                                .footer(EmbedCreateFields.Footer.of("SwanAuth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                                .build();
 
-                                    Mono<Message> sendMessageToAdmins = gateway.getChannelById(adminChannelID)
-                                            .ofType(GuildMessageChannel.class)
-                                            .flatMap(channel -> channel.createMessage(message));
+                                        MessageCreateSpec message = MessageCreateSpec.builder()
+                                                .addEmbed(embed)
+                                                .addComponent(ActionRow.of(acceptButton, denyButton))
+                                                .build();
 
-                                    return event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS).and(sendMessageToAdmins);
+                                        Mono<Message> sendMessageToAdmins = gateway.getChannelById(adminChannelID)
+                                                .ofType(GuildMessageChannel.class)
+                                                .flatMap(channel -> channel.createMessage(message));
+
+                                        Integer currentNumberOfVerifications = manualVerificationsMap.get(memberID);
+                                        if (currentNumberOfVerifications == null) {
+                                            manualVerificationsMap.put(memberID, 1);
+                                        } else {
+                                            manualVerificationsMap.put(memberID, currentNumberOfVerifications + 1);
+                                        }
+                                        return event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS).and(sendMessageToAdmins);
+                                    } else {
+                                        return event.editReply(TOO_MANY_VERIFICATION_REQUESTS_ERROR);
+                                    }
                                 } else {
                                     return event.editReply(ACCOUNT_ALREADY_VERIFIED_ERROR);
                                 }
@@ -567,6 +578,7 @@ public class Main {
 
                                                     Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
 
+                                                    manualVerificationsMap.remove(memberID.asString());
                                                     return event.reply("The user has been verified successfully!").withEphemeral(true).and(notifyMemberOfResult).then(giveMemberVerifiedRole).and(removeButtons);
                                                 } else {
                                                     Mono<Void> notifyMemberOfResult = gateway.getChannelById(verificationChannel)
@@ -588,6 +600,7 @@ public class Main {
 
                                                     Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
 
+                                                    manualVerificationsMap.remove(memberID.asString());
                                                     return event.reply("The user has been denied manual verification and notified accordingly").withEphemeral(true).and(notifyMemberOfResult).and(removeButtons);
                                                 }
                                             } else {
