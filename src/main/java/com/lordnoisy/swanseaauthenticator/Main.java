@@ -480,7 +480,6 @@ public class Main {
                             result = HELP_COMMAND_SUCCESS;
                         }
                         if (event.getCommandName().equals(NON_STUDENT_VERIFY_COMMAND_NAME)) {
-                            //TODO: Prevent user from spamming this
                             String memberID = event.getInteraction().getMember().get().getId().asString();
                             if (isServerConfigured) {
                                 boolean hasVerifiedRole = event.getInteraction().getMember().get().getRoleIds().contains(guildDataMap.get(guildSnowflake).getVerifiedRoleID());
