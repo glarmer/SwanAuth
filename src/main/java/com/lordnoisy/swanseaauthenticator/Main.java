@@ -516,7 +516,7 @@ public class Main {
                                     .get()
                                     .getBasePermissions()
                                     .map(perms -> perms.contains(Permission.ADMINISTRATOR))
-                                    .subscribe(hasAdmin -> admin.set(hasAdmin));
+                                    .subscribe(admin::set);
 
                             if (!admin.get()){
                                 result = INSUFFICIENT_PERMISSIONS_ERROR;
@@ -528,22 +528,22 @@ public class Main {
 
                                 gateway.getChannelById(Snowflake.of(verificationChannel))
                                         .map(channel -> channel.getId().asString().equals(verificationChannel))
-                                        .subscribe(hasChannel -> verificationChannelValid.set(hasChannel));
+                                        .subscribe(verificationChannelValid::set);
                             }
                             if (adminChannel.matches("\\d+")) {
                                 gateway.getChannelById(Snowflake.of(adminChannel))
                                         .map(channel -> channel.getId().asString().equals(adminChannel))
-                                        .subscribe(hasChannel -> adminChannelValid.set(hasChannel));
+                                        .subscribe(adminChannelValid::set);
                             }
                             if (unverifiedRole.matches("\\d+")) {
                                 gateway.getRoleById(guildSnowflake, Snowflake.of(unverifiedRole))
                                         .map(role -> role.getId().asString().equals(unverifiedRole))
-                                        .subscribe(hasRole -> unverifiedRoleValid.set(hasRole));
+                                        .subscribe(unverifiedRoleValid::set);
                             }
                             if (verifiedRole.matches("\\d+")) {
                                 gateway.getRoleById(guildSnowflake, Snowflake.of(verifiedRole))
                                         .map(role -> role.getId().asString().equals(verifiedRole))
-                                        .subscribe(hasRole -> verifiedRoleValid.set(hasRole));
+                                        .subscribe(verifiedRoleValid::set);
                             }
 
                             //Output any errors
@@ -585,7 +585,7 @@ public class Main {
                             if (isServerConfigured) {
                                 boolean hasVerifiedRole = event.getInteraction().getMember().get().getRoleIds().contains(guildDataMap.get(guildSnowflake).getVerifiedRoleID());
                                 if (!hasVerifiedRole) {
-                                    if (manualVerificationsMap.get(memberID) == null || manualVerificationsMap.get(memberID).intValue() < MAX_VERIFICATION_REQUESTS) {
+                                    if (manualVerificationsMap.get(memberID) == null || manualVerificationsMap.get(memberID) < MAX_VERIFICATION_REQUESTS) {
                                         String reason = event.getOption(REASON_OPTION).get().getValue().get().asString();
 
 
