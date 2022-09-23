@@ -480,32 +480,39 @@ public class Main {
                         }
                         if (event.getCommandName().equals(NON_STUDENT_VERIFY_COMMAND_NAME)) {
                             if (isServerConfigured) {
-                                String reason = event.getOption("reason").get().getValue().get().asString();
-                                String memberID = event.getInteraction().getMember().get().getId().asString();
 
-                                Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
-                                Button acceptButton = Button.success("swanauth:accept:"+memberID, "Accept");
-                                Button denyButton = Button.danger("swanauth:deny:"+memberID, "Deny");
+                                boolean hasVerifiedRole = event.getInteraction().getMember().get().getRoleIds().contains(guildDataMap.get(guildSnowflake).getVerifiedRoleID());
 
-                                String memberMention = "<@" + memberID + ">";
+                                if (!hasVerifiedRole) {
+                                    String reason = event.getOption("reason").get().getValue().get().asString();
+                                    String memberID = event.getInteraction().getMember().get().getId().asString();
 
-                                EmbedCreateSpec embed = EmbedCreateSpec.builder()
-                                        .title("A user has requested manual verification!")
-                                        .color(Color.BLUE)
-                                        .description(memberMention + " gave the following reason: " + reason)
-                                        .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
-                                        .build();
+                                    Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
+                                    Button acceptButton = Button.success("swanauth:accept:" + memberID, "Accept");
+                                    Button denyButton = Button.danger("swanauth:deny:" + memberID, "Deny");
 
-                                MessageCreateSpec message = MessageCreateSpec.builder()
-                                        .addEmbed(embed)
-                                        .addComponent(ActionRow.of(acceptButton, denyButton))
-                                        .build();
+                                    String memberMention = "<@" + memberID + ">";
 
-                                Mono<Message> sendMessageToAdmins = gateway.getChannelById(adminChannelID)
-                                        .ofType(GuildMessageChannel.class)
-                                        .flatMap(channel -> channel.createMessage(message));
+                                    EmbedCreateSpec embed = EmbedCreateSpec.builder()
+                                            .title("A user has requested manual verification!")
+                                            .color(Color.BLUE)
+                                            .description(memberMention + " gave the following reason: " + reason)
+                                            .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                            .build();
 
-                                return event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS).and(sendMessageToAdmins);
+                                    MessageCreateSpec message = MessageCreateSpec.builder()
+                                            .addEmbed(embed)
+                                            .addComponent(ActionRow.of(acceptButton, denyButton))
+                                            .build();
+
+                                    Mono<Message> sendMessageToAdmins = gateway.getChannelById(adminChannelID)
+                                            .ofType(GuildMessageChannel.class)
+                                            .flatMap(channel -> channel.createMessage(message));
+
+                                    return event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS).and(sendMessageToAdmins);
+                                } else {
+                                    return event.editReply(ACCOUNT_ALREADY_VERIFIED_ERROR);
+                                }
                             } else {
                                 result = SERVER_NOT_CONFIGURED_ERROR;
                             }
