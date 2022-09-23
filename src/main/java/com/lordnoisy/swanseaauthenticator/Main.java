@@ -225,18 +225,12 @@ public class Main {
                             GuildData guildData = new GuildData(guildID.asString(), null, null, null, null);
                             guildDataMap.put(guildID, guildData);
                         }
-
-                        // Register commands in each guild
-                        GuildCommandRegistrar.create(gateway.getRestClient(), guildID.asLong(), applicationCommandRequestList)
-                                .registerCommands()
-                                .doOnError(e -> LOG.warn("Unable to create guild command", e))
-                                .onErrorResume(e -> Mono.empty())
-                                .blockLast();
-
                     } catch (NullPointerException npe) {
                         System.out.println("Continuing");
                     }
                 }).then();
+
+                Mono<Void> createGlobalApplicationCommands = DiscordUtilities.createGlobalCommandsMono(applicationCommandRequestList, gateway);
 
                 Mono<Void> actOnJoin = gateway.on(MemberJoinEvent.class, event -> {
                     Snowflake serverID = event.getGuildId();
@@ -715,7 +709,7 @@ public class Main {
                         }).then();
 
                 // combine them!
-                return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnUnban).and(actOnSlashCommand).and(buttonListener);
+                return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnUnban).and(actOnSlashCommand).and(buttonListener).and(createGlobalApplicationCommands);
             });
 
             login.block();
