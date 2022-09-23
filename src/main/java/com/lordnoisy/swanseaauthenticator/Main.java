@@ -7,20 +7,31 @@ import discord4j.core.event.ReactiveEventAdapter;
 import discord4j.core.event.domain.guild.BanEvent;
 import discord4j.core.event.domain.guild.MemberJoinEvent;
 import discord4j.core.event.domain.guild.UnbanEvent;
+import discord4j.core.event.domain.interaction.ButtonInteractionEvent;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.command.ApplicationCommandOption;
+import discord4j.core.object.component.ActionRow;
+import discord4j.core.object.component.Button;
 import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
+import discord4j.core.object.entity.Message;
+import discord4j.core.object.entity.channel.GuildMessageChannel;
+import discord4j.core.spec.EmbedCreateFields;
+import discord4j.core.spec.EmbedCreateSpec;
+import discord4j.core.spec.MessageCreateSpec;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
 import discord4j.gateway.intent.IntentSet;
+import discord4j.rest.util.Color;
 import discord4j.rest.util.Permission;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -45,6 +56,13 @@ public class Main {
     public static final String USER_IS_BANNED_RESULT = "This user has been banned on a different Discord account, and so is no longer allowed on this server...";
     public static final String VERIFY_COMMAND_SUCCESS = "You have successfully verified!";
     public static final String SERVER_NOT_CONFIGURED_ERROR = "The server admins haven't configured the bot yet, contact them for assistance.";
+    public static final String FOOTER_ICON_URL = "https://media.discordapp.net/attachments/1020458334882631690/1022266062579974184/SwanAuth.png?width=910&height=910";
+    public static final String MANUAL_VERIFICATION_COMMAND_SUCCESS = "Your manual verification request has been sent to the admins!";
+    public static final String NON_STUDENT_VERIFY_COMMAND_NAME = "nonstudentverify";
+    public static final String SETUP_COMMAND_NAME = "setup";
+    public static final String HELP_COMMAND_NAME = "help";
+    public static final String VERIFY_COMMAND_NAME = "verify";
+    public static final String BEGIN_COMMAND_NAME = "begin";
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -66,7 +84,7 @@ public class Main {
 
                 // Make commands
                 ApplicationCommandRequest beginCommand = ApplicationCommandRequest.builder()
-                        .name("begin")
+                        .name(BEGIN_COMMAND_NAME)
                         .description("Begin the verification process by entering your Student ID")
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("student_id")
@@ -77,7 +95,7 @@ public class Main {
                         .build();
 
                 ApplicationCommandRequest verifyCommand = ApplicationCommandRequest.builder()
-                        .name("verify")
+                        .name(VERIFY_COMMAND_NAME)
                         .description("Finish verifying by entering your verification token :)")
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("verification_code")
@@ -87,8 +105,20 @@ public class Main {
                                 .build())
                         .build();
 
+                ApplicationCommandRequest nonStudentVerifyCommand = ApplicationCommandRequest.builder()
+                        .name(NON_STUDENT_VERIFY_COMMAND_NAME)
+                        .description("Use this to ask for verification if you do not have a student number")
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name("reason")
+                                .description("The reason why you need to manually verify, e.g. you are a staff member...")
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .maxLength(4000)
+                                .required(true)
+                                .build())
+                        .build();
+
                 ApplicationCommandRequest setupCommand = ApplicationCommandRequest.builder()
-                        .name("setup")
+                        .name(SETUP_COMMAND_NAME)
                         .description("Configure the bot so it can begin verifying users")
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("verification_channel")
@@ -117,11 +147,11 @@ public class Main {
                         .build();
 
                 ApplicationCommandRequest helpCommand = ApplicationCommandRequest.builder()
-                        .name("help")
+                        .name(HELP_COMMAND_NAME)
                         .description("Run this command to get help on how to use the bot!")
                         .build();
 
-                List<ApplicationCommandRequest> applicationCommandRequestList = List.of(beginCommand, verifyCommand, helpCommand, setupCommand);
+                List<ApplicationCommandRequest> applicationCommandRequestList = List.of(beginCommand, verifyCommand, helpCommand, setupCommand, nonStudentVerifyCommand);
 
 
                 Mono<Void> doOnEachGuild = gateway.getGuilds().doOnEach(guild -> {
@@ -259,7 +289,7 @@ public class Main {
 
                 //Logic for commands
                 //TODO: Admin commands? /manualVerify (even though they could just add the role, it makes it more obvious)
-                //TODO: Have a help command for users
+                //TODO: Have a help command for users - maybe detect admin and give more advice?
                 //TODO: unban command for ease
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
@@ -275,7 +305,7 @@ public class Main {
                                 .map(Guild::getName)
                                 .subscribe(name -> guildName.set(name));
 
-                        if (event.getCommandName().equals("begin")) {
+                        if (event.getCommandName().equals(BEGIN_COMMAND_NAME)) {
                             if (isServerConfigured) {
                                 result = BEGIN_COMMAND_SUCCESS_RESULT;
                                 String studentNumber = event.getOption("student_id").get().getValue().get().asString();
@@ -318,7 +348,7 @@ public class Main {
                                 result = SERVER_NOT_CONFIGURED_ERROR;
                             }
                         }
-                        if (event.getCommandName().equals("verify")) {
+                        if (event.getCommandName().equals(VERIFY_COMMAND_NAME)) {
                             String tokenInput = event.getOption("verification_code").get().getValue().get().asString();
                             if (isServerConfigured) {
                                 result = VERIFY_COMMAND_SUCCESS;
@@ -357,7 +387,7 @@ public class Main {
                             }
                             return event.editReply(result);
                         }
-                        if (event.getCommandName().equals("setup")) {
+                        if (event.getCommandName().equals(SETUP_COMMAND_NAME)) {
                             result = SETUP_COMMAND_SUCCESS;
 
                             //Get inputs
@@ -366,6 +396,12 @@ public class Main {
                             String unverifiedRole = event.getOption("unverified_role").get().getValue().get().asString();
                             String verifiedRole = event.getOption("verified_role").get().getValue().get().asString();
 
+                            //Validate the inputs
+                            AtomicBoolean verificationChannelValid = new AtomicBoolean(false);
+                            AtomicBoolean adminChannelValid = new AtomicBoolean(false);
+                            AtomicBoolean unverifiedRoleValid = new AtomicBoolean(false);
+                            AtomicBoolean verifiedRoleValid = new AtomicBoolean(false);
+
                             //Check if admin
                             AtomicBoolean admin = new AtomicBoolean(false);
                             event.getInteraction()
@@ -373,21 +409,16 @@ public class Main {
                                     .get()
                                     .getBasePermissions()
                                     .map(perms -> perms.contains(Permission.ADMINISTRATOR))
-                                    .subscribe(admin::set);
+                                    .subscribe(hasAdmin -> admin.set(hasAdmin));
 
                             if (!admin.get()){
                                 result = INSUFFICIENT_PERMISSIONS_ERROR;
                                 return event.editReply(result);
                             }
 
-                            //Validate the inputs
-                            AtomicBoolean verificationChannelValid = new AtomicBoolean(false);
-                            AtomicBoolean adminChannelValid = new AtomicBoolean(false);
-                            AtomicBoolean unverifiedRoleValid = new AtomicBoolean(false);
-                            AtomicBoolean verifiedRoleValid = new AtomicBoolean(false);
-
 
                             if (verificationChannel.matches("\\d+")) {
+
                                 gateway.getChannelById(Snowflake.of(verificationChannel))
                                         .map(channel -> channel.getId().asString().equals(verificationChannel))
                                         .subscribe(hasChannel -> verificationChannelValid.set(hasChannel));
@@ -439,15 +470,57 @@ public class Main {
                             guildData.setUnverifiedRoleID(Snowflake.of(unverifiedRole));
                             guildData.setVerifiedRoleID(Snowflake.of(verifiedRole));
                         }
-                        if (event.getCommandName().equals("help")) {
+                        if (event.getCommandName().equals(HELP_COMMAND_NAME)) {
                             result = HELP_COMMAND_SUCCESS;
+                        }
+                        if (event.getCommandName().equals(NON_STUDENT_VERIFY_COMMAND_NAME)) {
+                            if (isServerConfigured) {
+                                String reason = event.getOption("reason").get().getValue().get().asString();
+                                String memberID = event.getInteraction().getMember().get().getId().asString();
+
+                                Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
+                                Button acceptButton = Button.success("swanauth:accept:"+memberID, "Accept");
+                                Button denyButton = Button.danger("swanauth:deny:"+memberID, "Deny");
+
+                                String memberMention = "<@" + memberID + ">";
+
+                                EmbedCreateSpec embed = EmbedCreateSpec.builder()
+                                        .title("A user has requested manual verification!")
+                                        .color(Color.BLUE)
+                                        .description(memberMention + " gave the following reason: " + reason)
+                                        .footer(EmbedCreateFields.Footer.of("Swanauth | " + LocalDateTime.now(), FOOTER_ICON_URL))
+                                        .build();
+
+                                MessageCreateSpec message = MessageCreateSpec.builder()
+                                        .addEmbed(embed)
+                                        .addComponent(ActionRow.of(acceptButton, denyButton))
+                                        .build();
+
+                                Mono<Message> sendMessageToAdmins = gateway.getChannelById(adminChannelID)
+                                        .ofType(GuildMessageChannel.class)
+                                        .flatMap(channel -> channel.createMessage(message));
+
+                                return event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS).and(sendMessageToAdmins);
+                            } else {
+                                result = SERVER_NOT_CONFIGURED_ERROR;
+                            }
                         }
                         return event.editReply(result);
                     }
                 }).then();
 
+                Mono<Void> buttonListener = gateway.on(ButtonInteractionEvent.class, event -> {
+                            if (event.getCustomId().startsWith("swanauth")) {
+                                return event.reply("You clicked me!").withEphemeral(true);
+                            } else {
+                                // Ignore it
+                                return Mono.empty();
+                            }
+                        })
+                        .then(); //Transform the flux to a mono
+
                 // combine them!
-                return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnUnban).and(actOnSlashCommand);
+                return doOnEachGuild.and(actOnJoin).and(actOnBan).and(actOnUnban).and(actOnSlashCommand).and(buttonListener);
             });
 
             login.block();
