@@ -94,6 +94,7 @@ public class Main {
                                 .name("student_id")
                                 .description("Your Student ID")
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .maxLength(255)
                                 .required(true)
                                 .build())
                         .build();
@@ -105,6 +106,7 @@ public class Main {
                                 .name("verification_code")
                                 .description("The verification code you received via email!")
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .maxLength(255)
                                 .required(true)
                                 .build())
                         .build();
@@ -128,24 +130,28 @@ public class Main {
                                 .name("verification_channel")
                                 .description("The channel that you want the bot to use for verifications.")
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("admin_channel")
                                 .description("The channel that you want the bot to use for admin messages.")
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("unverified_role")
                                 .description("The unverified role you want to apply to users when they join the server.")
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name("verified_role")
                                 .description("The verified role you want to apply to users after they verify.")
                                 .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .maxLength(255)
                                 .required(true)
                                 .build())
                         .build();
@@ -290,11 +296,6 @@ public class Main {
                             }
                         }).then();
 
-
-                //Logic for commands
-                //TODO: Admin commands? /manualVerify (even though they could just add the role, it makes it more obvious)
-                //TODO: Have a help command for users - maybe detect admin and give more advice?
-                //TODO: unban command for ease
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
