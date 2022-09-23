@@ -278,7 +278,17 @@ public class Main {
                 Mono<Void> actOnBan = gateway.on(BanEvent.class, event -> {
                     String memberID = event.getUser().getId().asString();
                     Snowflake botSnowflake = gateway.getSelfId();
-                    return event.getGuild()
+                    String memberMention = DiscordUtilities.getMention(memberID);
+                    String message = memberMention + WAS_BANNED;
+                    Snowflake guildID = event.getGuildId();
+                    GuildData guildData = guildDataMap.get(guildID);
+
+                    Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
+                            .ofType(GuildMessageChannel.class)
+                            .flatMap(channel -> channel.createMessage(message))
+                            .then();
+
+                    Mono<Void> banAltsMono = event.getGuild()
                             .flatMap(guild -> guild.getAuditLog().withActionType(ActionType.MEMBER_BAN_ADD)
                                     .take(1)
                                     .flatMap(auditLogPart -> {
@@ -295,8 +305,6 @@ public class Main {
                                             if (!(account == null)) {
                                                 String userID = account.getUserID();
                                                 ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
-                                                Snowflake guildID = event.getGuildId();
-                                                GuildData guildData = guildDataMap.get(guildID);
                                                 //Ban any alts
                                                 Mono<Void> banUserMono = Mono.empty();
                                                 for (Account currentAccount : accounts) {
@@ -314,30 +322,33 @@ public class Main {
                                                     }
                                                 }
 
-                                                String memberMention = DiscordUtilities.getMention(memberID);
-                                                String message = memberMention + WAS_BANNED;
+
 
                                                 //Insert ban into db
                                                 sqlRunner.insertBan(userID, event.getGuildId().asString());
-                                                Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
-                                                        .ofType(GuildMessageChannel.class)
-                                                        .flatMap(channel -> channel.createMessage(message))
-                                                        .then();
-
-                                                return banUserMono.and(sendMessageMono);
+                                                return banUserMono;
                                             } else {
                                                 return Mono.empty().then();
                                             }
                                         }
                                     }).then());
-
+                    return banAltsMono.and(sendMessageMono);
                 }).then();
 
                 Mono<Void> actOnUnban = gateway.on(UnbanEvent.class, event -> {
-                            String memberID = event.getUser().getId().asString();
+                    String memberID = event.getUser().getId().asString();
+                    Snowflake guildID = event.getGuildId();
+                    GuildData guildData = guildDataMap.get(guildID);
+                    String memberMention = DiscordUtilities.getMention(memberID);
+                    String message = memberMention + WAS_UNBANNED;
+
+                    Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
+                            .ofType(GuildMessageChannel.class)
+                            .flatMap(channel -> channel.createMessage(message))
+                            .then();
 
                     Snowflake botSnowflake = gateway.getSelfId();
-                    return event.getGuild()
+                    Mono<Void> unbanAltsMono = event.getGuild()
                             .flatMap(guild -> guild.getAuditLog().withActionType(ActionType.MEMBER_BAN_REMOVE)
                                     .take(1)
                                     .flatMap(auditLogPart -> {
@@ -353,8 +364,6 @@ public class Main {
                                             if (!(account == null)) {
                                                 String userID = account.getUserID();
                                                 ArrayList<Account> accounts = sqlRunner.getAccountsFromUserID(userID);
-                                                Snowflake guildID = event.getGuildId();
-                                                GuildData guildData = guildDataMap.get(guildID);
                                                 //Ban any alts
                                                 Mono<Void> unbanUserMono = Mono.empty();
                                                 for (Account currentAccount : accounts) {
@@ -372,25 +381,19 @@ public class Main {
                                                     }
                                                 }
 
-                                                String memberMention = DiscordUtilities.getMention(memberID);
-                                                String message = memberMention + WAS_UNBANNED;
+
 
                                                 //Insert ban into db
                                                 sqlRunner.deleteBan(userID, guildID.asString());
-                                                Mono<Void> sendMessageMono = gateway.getChannelById(guildData.getAdminChannelID())
-                                                        .ofType(GuildMessageChannel.class)
-                                                        .flatMap(channel -> channel.createMessage(message))
-                                                        .then();
 
-                                                return unbanUserMono.and(sendMessageMono);
+                                                return unbanUserMono;
                                             } else {
                                                 return Mono.empty().then();
                                             }
                                         }
                                     }).then());
-
-
-                        }).then();
+                    return unbanAltsMono.and(sendMessageMono);
+                }).then();
 
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
