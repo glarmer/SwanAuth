@@ -89,8 +89,9 @@ public class Main {
     public static final String ACCOUNT_ALREADY_VERIFIED_ERROR = "This discord account is already verified on this server!";
     public static final String DATABASE_ERROR = "There was an error contacting the database, please try again or contact the bot admin for help";
     public static final String DEFAULT_ERROR = "An error has occurred, please try again or contact an admin for help";
+    public static final String HAVE_NOT_BEGUN_ERROR = "You need to use the /begin command before trying to use /verify!";
     public static final String INCORRECT_COMMANDLINE_ARGUMENTS_ERROR = "You have entered the incorrect amount of command line arguments, please check that your mySQL and Email login is entered correctly.";
-    public static final String INCORRECT_STUDENT_NUMBER_ERROR = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please contact a moderator of this server!";
+    public static final String INCORRECT_STUDENT_NUMBER_ERROR = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please request verification with /nonstudentverify!";
     public static final String INCORRECT_TOKEN_ERROR = "The verification token you entered is incorrect, please try again...";
     public static final String INSUFFICIENT_PERMISSIONS_ERROR = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
     public static final String INVALID_ADMIN_CHANNEL_ERROR = "The admin channel ID you entered does not seem to exist in this server. ";
@@ -450,7 +451,11 @@ public class Main {
                             String tokenInput = event.getOption(VERIFICATION_CODE_OPTION).get().getValue().get().asString();
                             if (isServerConfigured) {
                                 result = VERIFY_COMMAND_SUCCESS;
-                                String accountID = sqlRunner.getAccountFromDiscordID(discordID).getAccountID();
+                                Account account = sqlRunner.getAccountFromDiscordID(discordID);
+                                if (account == null) {
+                                    return event.editReply(HAVE_NOT_BEGUN_ERROR);
+                                }
+                                String accountID = account.getAccountID();
                                 if (accountID != null) {
                                     if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
                                         int rows = sqlRunner.selectVerificationToken(accountID, guildSnowflake.asString(), tokenInput);
