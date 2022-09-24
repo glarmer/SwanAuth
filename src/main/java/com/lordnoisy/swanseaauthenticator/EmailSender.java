@@ -6,23 +6,25 @@ import javax.mail.internet.MimeMessage;
 import java.util.Properties;
 
 public class EmailSender {
-    private final static String EMAIL_PART_ONE = "<html lang=\"en\">\n" +
-            "    <body>\n" +
-            "        <div style=\"font-family:Calibri, sans-serif; font-size:larger;\">\n" +
-            "            <div style=\"display:flex; justify-content:center; height:500px; width: 600px; padding: 65px; background-image: url(https://media.discordapp.net/attachments/1018285865312727091/1023247964178763937/emailbackground.png); background-repeat:no-repeat; background-size:cover; background-color: #E4E6BC; border-radius:15px;\">\n" +
-            "                <div style=\"height:500px; width: 600px; border: solid #2B2B2B; background-color: #2B2B2B; display:flex; flex-direction:column;\">\n" +
-            "                    <div style=\"background-color:#5952FF; padding-left: 30px; padding-right: 30px;\">\n" +
-            "                        <img alt=\"The SwanAuth Logo\" height=\"auto\" width=\"100%\" src=\"https://media.discordapp.net/attachments/1018285865312727091/1023085000926699561/bannerlogo.png?width=1288&height=264\"/>\n" +
-            "                    </div>\n" +
-            "                    <div style=\"display:flex; justify-content:center; flex-grow:1; flex-direction:column;\">\n" +
-            "                        <p style=\"margin:50px; color:whitesmoke; align-self:center;\">";
-    private final static String EMAIL_PART_TWO = "</p>\n" +
-            "                    </div>\n" +
-            "                </div>\n" +
-            "            </div>\n" +
-            "        </div>\n" +
-            "    </body>\n" +
-            "</html>";
+    private final static String EMAIL_PART_ONE = """
+            <html lang="en">
+                <body>
+                    <div style="font-family:Calibri, sans-serif; font-size:larger; ">
+                        <div style="border: solid #E4E6BC 65px; display:flex; justify-content:center; width:90%; height:auto; max-height:500px; max-width: 600px; background-image: url(https://media.discordapp.net/attachments/1018285865312727091/1023247964178763937/emailbackground.png); background-repeat:no-repeat; background-size:cover; background-color: #E4E6BC; border-radius:15px;">
+                            <div style="width:100%; height:100%; min-height:500px; max-width: 600px; border: solid #2B2B2B; background-color: #2B2B2B; display:flex; flex-direction:column;">
+                                <div style="background-color:#5952FF; padding-left: 30px; padding-right: 30px;">
+                                    <img alt="The SwanAuth Logo" height="auto" width="100%" src="https://media.discordapp.net/attachments/1018285865312727091/1023085000926699561/bannerlogo.png?width=1288&height=264"/>
+                                </div>
+                                <div style="display:flex; justify-content:center; flex-grow:1; flex-direction:column;">
+                                    <p style="margin:50px; color:whitesmoke; align-self:center;">""";
+    private final static String EMAIL_PART_TWO = """
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </body>
+            </html>""";
 
     private final String host;
     private final int port;

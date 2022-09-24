@@ -379,11 +379,8 @@ public class Main {
                                                                         .then());
                                                     }
                                                 }
-
-
                                                 //Insert ban into db
                                                 sqlRunner.deleteBan(userID, guildID.asString());
-
                                                 return unbanUserMono;
                                             } else {
                                                 return Mono.empty().then();
@@ -406,7 +403,7 @@ public class Main {
                             return event.getInteraction().getGuild()
                                     .map(Guild::getName)
                                     .flatMap(name -> {
-                                        String resultToReturn = DEFAULT_ERROR;
+                                        String resultToReturn;
                                         if (isServerConfigured) {
                                             resultToReturn = BEGIN_COMMAND_SUCCESS_RESULT;
                                             String studentNumber = event.getOption(STUDENT_ID_OPTION).get().getValue().get().asString();
