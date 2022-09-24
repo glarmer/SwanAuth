@@ -6,9 +6,26 @@ import javax.mail.internet.MimeMessage;
 import java.util.Properties;
 
 public class EmailSender {
+    private final static String EMAIL_PART_ONE = "<html lang=\"en\">\n" +
+            "    <body>\n" +
+            "        <div style=\"font-family:Calibri, sans-serif; font-size:larger;\">\n" +
+            "            <div style=\"display:flex; justify-content:center; height:500px; width: 600px; padding: 65px; background-color: #E4E6BC; border-radius:15px;\">\n" +
+            "                <div style=\"height:500px; width: 600px; border: solid #2B2B2B; background-color: #2B2B2B; display:flex; flex-direction:column;\">\n" +
+            "                    <div style=\"background-color:#5952FF; padding-left: 30px; padding-right: 30px;\">\n" +
+            "                        <img alt=\"The SwanAuth Logo\" height=\"auto\" width=\"100%\" src=\"https://media.discordapp.net/attachments/1018285865312727091/1023085000926699561/bannerlogo.png?width=1288&height=264\"/>\n" +
+            "                    </div>\n" +
+            "                    <div style=\"display:flex; justify-content:center; flex-grow:1; flex-direction:column;\">\n" +
+            "                        <p style=\"margin:50px; color:whitesmoke; align-self:center;\">";
+    private final static String EMAIL_PART_TWO = "</p>\n" +
+            "                    </div>\n" +
+            "                </div>\n" +
+            "            </div>\n" +
+            "        </div>\n" +
+            "    </body>\n" +
+            "</html>";
+
     private final String host;
     private final int port;
-    private final boolean debug;
     private final String username;
     private final String password;
     private final String senderEmail;
@@ -25,7 +42,6 @@ public class EmailSender {
     public EmailSender(String host, int port, String username, String password, String senderEmail) {
         this.host = host;
         this.port = port;
-        this.debug = true;
         this.username = username;
         this.password = password;
         this.senderEmail = senderEmail;
@@ -40,9 +56,9 @@ public class EmailSender {
     public boolean sendVerificationEmail(String studentNumber, String verificationString, String guildName) {
         String studentEmail = studentNumber + "@swansea.ac.uk";
         String subjectHeader = guildName + " Discord Server Verification";
-        String body = "Your verification code for the \"" + guildName + "\" Discord server is: " +
+        String body = EMAIL_PART_ONE + "Your verification code for the \"" + guildName + "\" Discord server is: " +
                 verificationString + ".<br><br> To finish your verification, use the /verify command by" +
-                " typing in chat the following: /verify " + verificationString;
+                " typing in chat the following: /verify " + verificationString + EMAIL_PART_TWO;
 
         return this.sendMail(studentEmail, subjectHeader, body);
     }
