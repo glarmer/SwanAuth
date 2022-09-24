@@ -244,9 +244,14 @@ public class Main {
                         String memberMention = DiscordUtilities.getMention(memberID);
                         Account account = sqlRunner.getAccountFromDiscordID(memberID);
 
-                        boolean isVerified = sqlRunner.isVerified(account.getAccountID(), serverID.asString());
-                        Mono<Void> sendMessageOnJoin;
+                        boolean isVerified;
+                        if (account == null) {
+                            isVerified = false;
+                        } else {
+                            isVerified = sqlRunner.isVerified(account.getAccountID(), serverID.asString());
+                        }
 
+                        Mono<Void> sendMessageOnJoin;
                         Mono<Void> addDefaultRoleOnJoin;
                         if (isVerified) {
                             boolean isBanned = sqlRunner.isBanned(account.getUserID(), serverID.asString());
@@ -453,9 +458,8 @@ public class Main {
                                 Account account = sqlRunner.getAccountFromDiscordID(discordID);
                                 if (account == null) {
                                     return event.editReply(HAVE_NOT_BEGUN_ERROR);
-                                }
-                                String accountID = account.getAccountID();
-                                if (accountID != null) {
+                                } else {
+                                    String accountID = account.getAccountID();
                                     if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
                                         int rows = sqlRunner.selectVerificationToken(accountID, guildSnowflake.asString(), tokenInput);
                                         if (rows > 0) {
@@ -463,9 +467,9 @@ public class Main {
                                             sqlRunner.insertVerification(accountID, guildID);
                                             sqlRunner.deleteVerificationTokens(accountID, guildID);
                                         } else if (rows == -1) {
-                                            result = DATABASE_ERROR;
+                                            return event.editReply(DATABASE_ERROR);
                                         } else {
-                                            result = INCORRECT_TOKEN_ERROR;
+                                            return event.editReply(INCORRECT_TOKEN_ERROR);
                                         }
                                         Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
                                                 .map(member -> member.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
@@ -481,8 +485,6 @@ public class Main {
                                     } else {
                                         result = ACCOUNT_ALREADY_VERIFIED_ERROR;
                                     }
-                                } else {
-                                    result = DATABASE_ERROR;
                                 }
                             } else {
                                 result = SERVER_NOT_CONFIGURED_ERROR;
