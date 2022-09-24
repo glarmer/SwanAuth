@@ -7,22 +7,117 @@ import java.util.Properties;
 
 public class EmailSender {
     private final static String EMAIL_PART_ONE = """
-            <html lang="en">
-                <body>
-                    <div style="font-family:Calibri, sans-serif; font-size:larger; ">
-                        <div style="border: solid #E4E6BC 65px; display:flex; justify-content:center; width:90%; height:auto; max-height:500px; max-width: 600px; background-image: url(https://media.discordapp.net/attachments/1018285865312727091/1023247964178763937/emailbackground.png); background-repeat:no-repeat; background-size:cover; background-color: #E4E6BC; border-radius:15px;">
-                            <div style="width:100%; height:100%; min-height:500px; max-width: 600px; border: solid #2B2B2B; background-color: #2B2B2B; display:flex; flex-direction:column;">
-                                <div style="background-color:#5952FF; padding-left: 30px; padding-right: 30px;">
-                                    <img alt="The SwanAuth Logo" height="auto" width="100%" src="https://media.discordapp.net/attachments/1018285865312727091/1023085000926699561/bannerlogo.png?width=1288&height=264"/>
-                                </div>
-                                <div style="display:flex; justify-content:center; flex-grow:1; flex-direction:column;">
-                                    <p style="margin:50px; color:whitesmoke; align-self:center;">""";
+<html lang="en">
+    <body>
+        <style>
+        .sideColumn {
+            width: 65px;
+        }
+        .sideRow {
+            height: 65px;
+        }
+        #middleRow {
+            min-height:500px;
+        }
+        #table {
+            width:100vw;
+            height:1px;
+            min-height:500px;
+            max-width: 730px;
+            background-color:#E4E6BC;
+            border-radius:20px;
+        }
+        #centreHeader {
+            background-color: #5952FF;
+            height:auto;
+        }
+        #centreMain {
+            background-color: #2B2B2B;
+            height:100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        #centreTable {
+            max-height:100%;
+            min-height:500px;
+            height:1px;
+            overflow:auto;
+            border:none;
+            font-family:Calibri, sans-serif; font-size:larger;
+            color: whitesmoke;
+            background-image: url("https://via.placeholder.com/10x10/E4E6BC?text=%E2%80%8E");
+            background-repeat: repeat;
+        }
+        #headerLogo {
+            max-width: 90%;
+            max-height: 100%;
+        }
+        #headerRow {
+            height:100px;
+        }
+        #table {
+            font-family:Calibri, sans-serif; font-size:larger;
+            color: whitesmoke;
+            background-image: url("https://via.placeholder.com/10x10/E4E6BC?text=%E2%80%8E");
+            background-repeat: repeat;
+        }
+        #mainText {
+            text-align: center;
+        }
+        .cornerImg {
+            border-radius: 20px;
+        }
+                    </style>
+                    <table id="table">
+                        <tr class="sideRow">
+                            <th class="sideColumn">
+                                <img class="cornerImg" src="https://via.placeholder.com/65x65/E4E6BC?text=%E2%80%8E";>
+                            </th>
+                            <th>
+                                <img id="topImg" src="https://via.placeholder.com/500x65/E4E6BC?text=%E2%80%8E";>
+                            </th>
+                            <th class="sideColumn">
+                                <img class="cornerImg" src="https://via.placeholder.com/65x65/E4E6BC?text=%E2%80%8E";>
+                            </th>
+                        </tr>
+                        <tr id="middleRow">
+                            <td>
+                                <img class="side" src="https://via.placeholder.com/65x65/E4E6BC?text=%E2%80%8E";>
+                            </td>
+                            <td id="centreCell">
+                                <table id="centreTable" cellspacing="0" cellpadding="0">
+                                    <tr id="headerRow">
+                                        <th id="centreHeader">
+                                            <img id="headerLogo" alt="The SwanAuth Logo" src="https://media.discordapp.net/attachments/1018285865312727091/1023085000926699561/bannerlogo.png?width=1288&height=264"/>
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <td id="centreMain">
+                                            <p id="mainText">
+                                    """;
     private final static String EMAIL_PART_TWO = """
                                     </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td>
+                                <img class="side" src="https://via.placeholder.com/65x65/E4E6BC?text=%E2%80%8E";>
+                            </td>
+                        </tr>
+                        <tr class="sideRow">
+                            <td>
+                                <img class="cornerImg" src="https://via.placeholder.com/65x65/E4E6BC?text=%E2%80%8E";>
+                            </td>
+                            <td>
+                                <img id="bottomImg" src="https://via.placeholder.com/500x65/E4E6BC?text=%E2%80%8E";>
+                            </td>
+                            <td>
+                                <img class="cornerImg" src="https://via.placeholder.com/65x65/E4E6BC?text=%E2%80%8E";>
+                            </td>
+                        </tr>
+                    </table>
                 </body>
             </html>""";
 
