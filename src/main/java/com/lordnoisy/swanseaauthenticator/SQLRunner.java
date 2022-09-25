@@ -40,9 +40,11 @@ public class SQLRunner {
 
     //Update Statements
     final private String UPDATE_GUILD_DATA_SQL = "UPDATE guilds SET admin_channel_id = ?, verification_channel_id = ?, unverified_role_id = ?, verified_role_id = ? WHERE guild_id = ?;";
+    final private String UPDATE_ACCOUNT_SQL = "UPDATE accounts SET user_id = ? WHERE account_id = ?;";
 
     //Delete Statements
     final private String DELETE_VERIFICATION_TOKENS_SQL = "DELETE FROM verification_tokens WHERE account_id = ? AND guild_id = ?;";
+    final private String DELETE_ALL_VERIFICATION_TOKENS_SQL = "DELETE FROM verification_tokens WHERE account_id = ?;";
     final private String DELETE_BAN_SQL = "DELETE FROM bans WHERE user_id = ? AND guild_id = ?;";
 
     final private DataSource DATASOURCE;
@@ -81,7 +83,7 @@ public class SQLRunner {
     }
 
     /**
-     * Delete all outstanding verification tokens for an account
+     * Delete all outstanding verification tokens for an account for a guild
      *
      * @param accountID account ID
      * @return true if successful, false otherwise
@@ -91,6 +93,18 @@ public class SQLRunner {
         parameters.add(accountID);
         parameters.add(guildID);
         return executeQuery(parameters, DELETE_VERIFICATION_TOKENS_SQL);
+    }
+
+    /**
+     * Delete all outstanding verification tokens for an account
+     *
+     * @param accountID account ID
+     * @return true if successful, false otherwise
+     */
+    public boolean deleteAllVerificationTokens(String accountID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(accountID);
+        return executeQuery(parameters, DELETE_ALL_VERIFICATION_TOKENS_SQL);
     }
 
     /**
@@ -492,6 +506,20 @@ public class SQLRunner {
         parameters.add(verifiedRoleID);
         parameters.add(guildID);
         return executeQuery(parameters, UPDATE_GUILD_DATA_SQL);
+    }
+
+    /**
+     * Updates an account
+     *
+     * @param userID        new user ID
+     * @param accountID account ID to edit
+     * @return true if successful, false otherwise
+     */
+    public boolean updateAccount(String userID, String accountID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(userID);
+        parameters.add(accountID);
+        return executeQuery(parameters, UPDATE_ACCOUNT_SQL);
     }
 
     /**

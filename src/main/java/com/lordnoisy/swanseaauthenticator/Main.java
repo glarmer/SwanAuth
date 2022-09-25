@@ -430,7 +430,32 @@ public class Main {
                                                 if (!studentNumber.equals(sqlRunner.getStudentIDFromUserID(userID))) {
                                                     if (sqlRunner.isVerifiedAnywhere(accountID)) {
                                                         return event.editReply(VERIFIED_UNDER_ANOTHER_STUDENT_ID_ERROR);
+                                                    } else {
+                                                        // At this point we have a problem
+                                                        // It has found an account ID
+                                                        // But that account ID is linked to a user with a different student number
+                                                        // This could happen if someone erroneously enters the wrong number first time
+                                                        // So now we need to deal with that
+
+                                                        // We know they aren't verified ANYWHERE yet, so what we can do is
+                                                        // delete their previous tokens
+                                                        // update their account to use the correct userID - studentID
+
+                                                        String newUserID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
+                                                        if (newUserID == null) {
+                                                            return event.editReply(DATABASE_ERROR);
+                                                        }
+                                                        if (sqlRunner.updateAccount(newUserID, accountID)) {
+                                                            if (sqlRunner.deleteAllVerificationTokens(accountID)) {
+                                                                userID = newUserID;
+                                                            } else {
+                                                                return event.editReply(DATABASE_ERROR);
+                                                            }
+                                                        } else {
+                                                            return event.editReply(DATABASE_ERROR);
+                                                        }
                                                     }
+
                                                 }
                                                 if (userID != null) {
                                                     if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
