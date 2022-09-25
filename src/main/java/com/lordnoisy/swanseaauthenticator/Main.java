@@ -102,6 +102,7 @@ public class Main {
     public static final String SETUP_COMMAND_ERROR = "Configuring bot failed, please try again or contact the bot admin.";
     public static final String TOO_MANY_ATTEMPTS_ERROR = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
     public static final String TOO_MANY_VERIFICATION_REQUESTS_ERROR = "You already have a pending verification request! Please wait a while...";
+    public static final String VERIFIED_UNDER_ANOTHER_STUDENT_ID_ERROR = "You have already verified with another student ID previously!";
 
     //Misc
     public static final Color EMBED_COLOUR = Color.of(89, 82, 255);
@@ -114,7 +115,6 @@ public class Main {
     public static final String BUTTON_ACCEPT = "accept";
     public static final String BUTTON_DENY = "deny";
     public static final String BUTTON_ID = "swanauth";
-
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -408,7 +408,19 @@ public class Main {
                                             resultToReturn = BEGIN_COMMAND_SUCCESS_RESULT;
                                             String studentNumber = event.getOption(STUDENT_ID_OPTION).get().getValue().get().asString();
                                             if (studentNumber.matches("\\d+")) {
-                                                String userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
+
+                                                //Check that the user hasn't previously verified under a different student number
+                                                Account account = sqlRunner.getAccountFromDiscordID(discordID);
+                                                String userID;
+                                                if (account == null) {
+                                                    userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
+                                                } else {
+                                                    userID = account.getUserID();
+                                                }
+                                                if (!studentNumber.equals(sqlRunner.getStudentIDFromUserID(userID))) {
+                                                    return event.editReply(VERIFIED_UNDER_ANOTHER_STUDENT_ID_ERROR);
+                                                }
+
                                                 if (userID != null) {
                                                     if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
                                                         String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);

@@ -26,6 +26,7 @@ public class SQLRunner {
     final private String SELECT_VERIFIED_SQL = "SELECT * FROM verifications WHERE account_id = ? AND guild_id = ?;";
     final private String SELECT_ACCOUNTS_BY_USER_ID_SQL = "SELECT * FROM accounts WHERE user_id = ?;";
     final private String SELECT_BANNED_SQL = "SELECT * FROM bans WHERE user_id = ? AND guild_id = ?;";
+    final private String SELECT_STUDENT_ID_BY_USER_SQL = "SELECT * FROM users WHERE user_id = ?;";
 
     //INSERT Statements
     final private String INSERT_GUILD_SQL = "INSERT INTO guilds (guild_id) VALUES (?);";
@@ -132,6 +133,22 @@ public class SQLRunner {
         } catch (SQLException e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    public String getStudentIDFromUserID(String userID) {
+        try (Connection connection = DATASOURCE.getDatabaseConnection(); PreparedStatement statement = connection.prepareStatement(SELECT_STUDENT_ID_BY_USER_SQL)) {
+            statement.setString(1, userID);
+            try (ResultSet accountResults = statement.executeQuery()) {
+                accountResults.next();
+                String studentID = accountResults.getString("student_id");
+
+                return studentID;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            //forgive me for I have sinned
+            return "null";
         }
     }
 
