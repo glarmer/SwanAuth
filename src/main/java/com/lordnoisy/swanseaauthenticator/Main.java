@@ -122,7 +122,13 @@ public class Main {
             String token = args[0];
             DataSource databaseConnector = new DataSource(args[1], args[2], args[3]);
             SQLRunner sqlRunner = new SQLRunner(databaseConnector);
-            EmailSender emailSender = new EmailSender(args[4], Integer.parseInt(args[5]), args[6], args[7], args[8]);
+
+            String host = args[4];
+            int port = Integer.parseInt(args[5]);
+            String username = args[6];
+            String password = args[7];
+            String senderEmail = args[8];
+            EmailSender emailSender = new EmailSender(host, port, username, password, senderEmail);
             sqlRunner.databaseConfiguredCheck();
 
             // Creates a map containing details of each server stored in the mySQL db
