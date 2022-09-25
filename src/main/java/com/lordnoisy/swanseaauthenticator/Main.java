@@ -185,28 +185,30 @@ public class Main {
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name(VERIFICATION_CHANNEL_OPTION)
                                 .description(VERIFICATION_CHANNEL_OPTION_DESCRIPTION)
-                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .type(ApplicationCommandOption.Type.CHANNEL.getValue())
+                                .channelTypes(List.of(0))
                                 .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name(ADMIN_CHANNEL_OPTION)
                                 .description(ADMIN_CHANNEL_OPTION_DESCRIPTION)
-                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .type(ApplicationCommandOption.Type.CHANNEL.getValue())
+                                .channelTypes(List.of(0))
                                 .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name(UNVERIFIED_ROLE_OPTION)
                                 .description(UNVERIFIED_ROLE_OPTION_DESCRIPTION)
-                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .type(ApplicationCommandOption.Type.ROLE.getValue())
                                 .maxLength(255)
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name(VERIFIED_ROLE_OPTION)
                                 .description(VERIFIED_ROLE_OPTION_DESCRIPTION)
-                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .type(ApplicationCommandOption.Type.ROLE.getValue())
                                 .maxLength(255)
                                 .required(true)
                                 .build())
@@ -403,6 +405,9 @@ public class Main {
                         event.deferReply().withEphemeral(true).subscribe();
                         Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                         String result = null;
+                        if (!guildDataMap.containsKey(guildSnowflake)) {
+                            guildDataMap.put(guildSnowflake , new GuildData(guildSnowflake.asString(), null, null, null, null));
+                        }
                         boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() != null);
                         String discordID = event.getInteraction().getMember().get().getId().asString();
 
@@ -540,103 +545,41 @@ public class Main {
                         }
                         if (event.getCommandName().equals(SETUP_COMMAND_NAME)) {
                             //Get inputs
-                            String verificationChannel = event.getOption(VERIFICATION_CHANNEL_OPTION).get().getValue().get().asString();
-                            String adminChannel = event.getOption(ADMIN_CHANNEL_OPTION).get().getValue().get().asString();
-                            String unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asString();
-                            String verifiedRole = event.getOption(VERIFIED_ROLE_OPTION).get().getValue().get().asString();
-
+                            String verificationChannel = event.getOption(VERIFICATION_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
+                            String adminChannel = event.getOption(ADMIN_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
+                            String unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
+                            String verifiedRole = event.getOption(VERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
                             try {
                                 Snowflake verificationChannelSnowflake = Snowflake.of(verificationChannel);
                                 Snowflake adminChannelSnowflake = Snowflake.of(adminChannel);
                                 Snowflake unverifiedRoleSnowflake = Snowflake.of(unverifiedRole);
                                 Snowflake verifiedRoleSnowflake = Snowflake.of(verifiedRole);
-                                //I hate this and I am sorry.
                                 return event.getInteraction()
                                         .getMember()
                                         .get()
                                         .getBasePermissions()
                                         .map(perms -> perms.contains(Permission.ADMINISTRATOR))
                                         .flatMap(hasAdmin -> {
-                                            System.out.println("THIS USER IS AN ADMIN: " + hasAdmin);
                                             if (hasAdmin) {
-                                                String error = null;
-                                                if (!verificationChannel.matches("\\d+")) {
-                                                    error = INVALID_VERIFICATION_CHANNEL_ERROR;
+                                                //Enter the new configuration into the database
+                                                if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString())) {
+                                                    return event.editReply(SETUP_COMMAND_ERROR);
                                                 }
-                                                if (!adminChannel.matches("\\d+")) {
-                                                    if (error == null) {
-                                                        error = INVALID_ADMIN_CHANNEL_ERROR;
-                                                    } else {
-                                                        error = error.concat(INVALID_ADMIN_CHANNEL_ERROR);
-                                                    }
-                                                }
-                                                if (!unverifiedRole.matches("\\d+")) {
-                                                    if (error == null) {
-                                                        error = INVALID_UNVERIFIED_ROLE_ERROR;
-                                                    } else {
-                                                        error = error.concat(INVALID_UNVERIFIED_ROLE_ERROR);
-                                                    }
-                                                }
-                                                if (!verifiedRole.matches("\\d+")) {
-                                                    if (error == null) {
-                                                        error = INVALID_VERIFIED_ROLE_ERROR;
-                                                    } else {
-                                                        error = error.concat(INVALID_VERIFIED_ROLE_ERROR);
-                                                    }
-                                                }
-                                                if (error == null) {
-                                                    return gateway.getChannelById(verificationChannelSnowflake)
-                                                            .map(channel -> channel.getId().asString().equals(verificationChannel))
-                                                            .flatMap(hasVerificationChannel -> {
-                                                                if (hasVerificationChannel) {
-                                                                    return gateway.getChannelById(adminChannelSnowflake)
-                                                                            .map(channel -> channel.getId().asString().equals(adminChannel))
-                                                                            .flatMap(hasAdminChannel -> {
-                                                                                if (hasAdminChannel) {
-                                                                                    return gateway.getRoleById(guildSnowflake, unverifiedRoleSnowflake)
-                                                                                            .map(role -> role.getId().asString().equals(unverifiedRole))
-                                                                                            .flatMap(hasUnverifiedRole -> {
-                                                                                                if (hasUnverifiedRole) {
-                                                                                                    return gateway.getRoleById(guildSnowflake, verifiedRoleSnowflake)
-                                                                                                            .map(role -> role.getId().asString().equals(verifiedRole))
-                                                                                                            .flatMap(hasVerifiedRole -> {
-                                                                                                                if (hasVerifiedRole) {
-                                                                                                                    //Enter the new configuration into the database
-                                                                                                                    if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString())) {
-                                                                                                                        return event.editReply(SETUP_COMMAND_ERROR);
-                                                                                                                    }
 
-                                                                                                                    //Edit the existing GuildData for this server
-                                                                                                                    GuildData guildData = guildDataMap.get(guildSnowflake);
-                                                                                                                    guildData.setAdminChannelID(adminChannelSnowflake);
-                                                                                                                    guildData.setVerificationChannelID(verificationChannelSnowflake);
-                                                                                                                    guildData.setUnverifiedRoleID(unverifiedRoleSnowflake);
-                                                                                                                    guildData.setVerifiedRoleID(verifiedRoleSnowflake);
-                                                                                                                    return event.editReply(SETUP_COMMAND_SUCCESS);
-                                                                                                                } else {
-                                                                                                                    return event.editReply(INVALID_VERIFIED_ROLE_ERROR);
-                                                                                                                }
-                                                                                                            });
-                                                                                                }
-                                                                                                return event.editReply(INVALID_UNVERIFIED_ROLE_ERROR);
-                                                                                            });
-                                                                                }
-                                                                                return event.editReply(INVALID_ADMIN_CHANNEL_ERROR);
-                                                                            });
-                                                                }
-                                                                return event.editReply(INVALID_VERIFICATION_CHANNEL_ERROR);
-                                                            });
-                                                } else {
-                                                    return event.editReply(error);
-                                                }
+                                                //Edit the existing GuildData for this server
+                                                GuildData guildData = guildDataMap.get(guildSnowflake);
+                                                guildData.setAdminChannelID(adminChannelSnowflake);
+                                                guildData.setVerificationChannelID(verificationChannelSnowflake);
+                                                guildData.setUnverifiedRoleID(unverifiedRoleSnowflake);
+                                                guildData.setVerifiedRoleID(verifiedRoleSnowflake);
+                                                return event.editReply(SETUP_COMMAND_SUCCESS);
+                                            } else {
+                                                return event.editReply(INVALID_VERIFIED_ROLE_ERROR);
                                             }
-                                            return event.editReply(INSUFFICIENT_PERMISSIONS_ERROR);
                                         });
                             } catch (NumberFormatException numberFormatException) {
-                                return event.editReply("There is an error with one of your IDs, please try again...");
+                                return event.editReply("There is an error with one of your options, please try again...");
                             }
-
-
                         }
                         if (event.getCommandName().equals(HELP_COMMAND_NAME)) {
                             result = HELP_COMMAND_SUCCESS;
