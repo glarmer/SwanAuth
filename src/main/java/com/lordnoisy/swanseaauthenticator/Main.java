@@ -115,6 +115,7 @@ public class Main {
     public static final String BUTTON_ACCEPT = "accept";
     public static final String BUTTON_DENY = "deny";
     public static final String BUTTON_ID = "swanauth";
+    public static final String EMAIL_ERROR = "There was an error sending the email, please try again or contact an admin for help";
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -438,8 +439,11 @@ public class Main {
                                                                     resultToReturn = DATABASE_ERROR;
                                                                 } else if (rows < 3) {
                                                                     String verificationCode = StringUtilities.getAlphaNumericString(20);
-                                                                    sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
-                                                                    emailSender.sendVerificationEmail(studentNumber, verificationCode, name);
+                                                                    if (emailSender.sendVerificationEmail(studentNumber, verificationCode, name)) {
+                                                                        sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
+                                                                    } else {
+                                                                        resultToReturn = EMAIL_ERROR;
+                                                                    }
                                                                 } else {
                                                                     resultToReturn = TOO_MANY_ATTEMPTS_ERROR;
                                                                 }
