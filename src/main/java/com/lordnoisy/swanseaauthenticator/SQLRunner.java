@@ -24,6 +24,7 @@ public class SQLRunner {
     final private String SELECT_VERIFICATION_TOKEN_SQL = "SELECT * FROM verification_tokens WHERE account_id = ? AND guild_id = ? AND token = ?;";
     final private String SELECT_ACCOUNT_BY_DISCORD_SQL = "SELECT * FROM accounts WHERE discord_id = ?;";
     final private String SELECT_VERIFIED_SQL = "SELECT * FROM verifications WHERE account_id = ? AND guild_id = ?;";
+    final private String SELECT_VERIFIED_ANYWHERE_SQL = "SELECT * FROM verifications WHERE account_id = ?;";
     final private String SELECT_ACCOUNTS_BY_USER_ID_SQL = "SELECT * FROM accounts WHERE user_id = ?;";
     final private String SELECT_BANNED_SQL = "SELECT * FROM bans WHERE user_id = ? AND guild_id = ?;";
     final private String SELECT_STUDENT_ID_BY_USER_SQL = "SELECT * FROM users WHERE user_id = ?;";
@@ -310,6 +311,18 @@ public class SQLRunner {
         parameters.add(accountID);
         parameters.add(guildID);
         return isInTable(parameters, SELECT_VERIFIED_SQL);
+    }
+
+    /**
+     * Retrieves whether an account is verified
+     *
+     * @param accountID the account ID of the user
+     * @return true if verified, false otherwise
+     */
+    public boolean isVerifiedAnywhere(String accountID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(accountID);
+        return isInTable(parameters, SELECT_VERIFIED_ANYWHERE_SQL);
     }
 
     /**

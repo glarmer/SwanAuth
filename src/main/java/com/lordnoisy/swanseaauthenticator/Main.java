@@ -419,18 +419,21 @@ public class Main {
                                                 //Check that the user hasn't previously verified under a different student number
                                                 Account account = sqlRunner.getAccountFromDiscordID(discordID);
                                                 String userID;
+                                                String accountID;
                                                 if (account == null) {
                                                     userID = sqlRunner.getOrCreateUserIDFromStudentID(studentNumber);
+                                                    accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
                                                 } else {
                                                     userID = account.getUserID();
+                                                    accountID = account.getAccountID();
                                                 }
                                                 if (!studentNumber.equals(sqlRunner.getStudentIDFromUserID(userID))) {
-                                                    return event.editReply(VERIFIED_UNDER_ANOTHER_STUDENT_ID_ERROR);
+                                                    if (sqlRunner.isVerifiedAnywhere(accountID)) {
+                                                        return event.editReply(VERIFIED_UNDER_ANOTHER_STUDENT_ID_ERROR);
+                                                    }
                                                 }
-
                                                 if (userID != null) {
                                                     if (!sqlRunner.isBanned(userID, guildSnowflake.asString())) {
-                                                        String accountID = sqlRunner.getOrCreateAccountIDFromDiscordIDAndUserID(userID, discordID);
                                                         if (accountID != null) {
                                                             if (!sqlRunner.isVerified(accountID, guildSnowflake.asString())) {
                                                                 //Check that there aren't 3 or more verification tokens made within the past 12 hours - discourages spam
