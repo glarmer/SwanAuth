@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
 
@@ -59,6 +58,7 @@ public class Main {
 
     //Command Option Names
     public static final String ADMIN_CHANNEL_OPTION = "admin_channel";
+    public static final String APPLY_UNVERIFIED_OPTION = "apply_unverified_role";
     public static final String REASON_OPTION = "reason";
     public static final String STUDENT_ID_OPTION = "student_id";
     public static final String UNVERIFIED_ROLE_OPTION = "unverified_role";
@@ -87,6 +87,7 @@ public class Main {
 
     //Errors
     public static final String ACCOUNT_ALREADY_VERIFIED_ERROR = "This discord account is already verified on this server!";
+    public static final String APPLY_UNVERIFIED_OPTION_DESCRIPTION = "Auto apply the unverified role to all users who don't already have it or the verified role.";
     public static final String DATABASE_ERROR = "There was an error contacting the database, please try again or contact the bot admin for help";
     public static final String DEFAULT_ERROR = "An error has occurred, please try again or contact an admin for help";
     public static final String HAVE_NOT_BEGUN_ERROR = "You need to use the /begin command before trying to use /verify!";
@@ -94,10 +95,6 @@ public class Main {
     public static final String INCORRECT_STUDENT_NUMBER_ERROR = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please request verification with /nonstudentverify!";
     public static final String INCORRECT_TOKEN_ERROR = "The verification token you entered is incorrect, please try again...";
     public static final String INSUFFICIENT_PERMISSIONS_ERROR = "You don't have permissions to perform this command! You need to be an administrator on the server to do this.";
-    public static final String INVALID_ADMIN_CHANNEL_ERROR = "The admin channel ID you entered does not seem to exist in this server. ";
-    public static final String INVALID_UNVERIFIED_ROLE_ERROR = "The unverified role ID you entered does not seem to exist in this server. ";
-    public static final String INVALID_VERIFICATION_CHANNEL_ERROR = "The verification channel ID you entered does not seem to exist in this server. ";
-    public static final String INVALID_VERIFIED_ROLE_ERROR = "The verified role ID you entered does not seem to exist in this server. ";
     public static final String SERVER_NOT_CONFIGURED_ERROR = "The server admins haven't configured the bot yet, contact them for assistance.";
     public static final String SETUP_COMMAND_ERROR = "Configuring bot failed, please try again or contact the bot admin.";
     public static final String TOO_MANY_ATTEMPTS_ERROR = "You have made too many attempts to begin verification recently, please either verify using an existing token or try again later.";
@@ -210,6 +207,12 @@ public class Main {
                                 .description(VERIFIED_ROLE_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.ROLE.getValue())
                                 .maxLength(255)
+                                .required(true)
+                                .build())
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name(APPLY_UNVERIFIED_OPTION)
+                                .description(APPLY_UNVERIFIED_OPTION_DESCRIPTION)
+                                .type(ApplicationCommandOption.Type.BOOLEAN.getValue())
                                 .required(true)
                                 .build())
                         .build();
@@ -549,6 +552,8 @@ public class Main {
                             String adminChannel = event.getOption(ADMIN_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
                             String unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
                             String verifiedRole = event.getOption(VERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
+                            boolean applyUnverified = event.getOption(APPLY_UNVERIFIED_OPTION).get().getValue().get().asBoolean();
+
                             try {
                                 Snowflake verificationChannelSnowflake = Snowflake.of(verificationChannel);
                                 Snowflake adminChannelSnowflake = Snowflake.of(adminChannel);
@@ -572,9 +577,31 @@ public class Main {
                                                 guildData.setVerificationChannelID(verificationChannelSnowflake);
                                                 guildData.setUnverifiedRoleID(unverifiedRoleSnowflake);
                                                 guildData.setVerifiedRoleID(verifiedRoleSnowflake);
-                                                return event.editReply(SETUP_COMMAND_SUCCESS);
+
+                                                Mono applyRolesMono = Mono.empty();
+                                                if (applyUnverified) {
+                                                    applyRolesMono = gateway.getGuildMembers(guildSnowflake)
+                                                            .collectList()
+                                                            .flatMap(members -> {
+                                                                Mono<Void> addRoleToMembers = Mono.empty();
+                                                                for (int i = 0; i < members.size(); i++) {
+                                                                    Member member = members.get(i);
+                                                                    boolean hasUnverifiedRole = member.getRoleIds().contains(unverifiedRoleSnowflake);
+                                                                    boolean hasVerifiedRole = member.getRoleIds().contains(verifiedRoleSnowflake);
+
+                                                                    if (!hasUnverifiedRole && !hasVerifiedRole) {
+                                                                        Mono<Void> addRoleToMember = member.addRole(unverifiedRoleSnowflake);
+                                                                        addRoleToMembers = addRoleToMembers.and(addRoleToMember);
+                                                                    }
+                                                                }
+                                                                return addRoleToMembers;
+                                                            })
+                                                            .then();
+                                                }
+
+                                                return event.editReply(SETUP_COMMAND_SUCCESS).and(applyRolesMono);
                                             } else {
-                                                return event.editReply(INVALID_VERIFIED_ROLE_ERROR);
+                                                return event.editReply(INSUFFICIENT_PERMISSIONS_ERROR);
                                             }
                                         });
                             } catch (NumberFormatException numberFormatException) {
