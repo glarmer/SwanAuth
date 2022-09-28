@@ -11,4 +11,6 @@ This readme is entirely temporary, but below is a quick outline of how you can s
 
 Once setup is completed the bot will notify users that they need to verify when they join and auto-apply the unverified role.
 
+Users can begin verification using the /begin command, they enter their student number, receive an email with a code and then use the /verify command to enter it. If they enter it correctly they will be unassigned the unverified role and assigned the verified role.
+
 There is a /nonstudentverify command, this can be used for a user without a studentID to ask for verification. This is helpful in the case of alumni, to be students, or staff members.
