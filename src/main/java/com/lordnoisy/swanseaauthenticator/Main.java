@@ -713,7 +713,7 @@ public class Main {
                                             Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
 
                                             manualVerificationsMap.remove(memberSnowflake.asString());
-                                            return event.reply("The user has been verified successfully!").withEphemeral(true).and(notifyMemberOfResult).then(giveMemberVerifiedRole).and(removeButtons);
+                                            return event.reply("The user has been verified successfully!").withEphemeral(true).then(giveMemberVerifiedRole).then(notifyMemberOfResult).and(removeButtons);
                                         } else {
                                             Mono<Void> notifyMemberOfResult = gateway.getChannelById(verificationChannel)
                                                     .ofType(GuildMessageChannel.class)
