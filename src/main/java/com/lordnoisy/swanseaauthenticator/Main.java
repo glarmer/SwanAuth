@@ -682,6 +682,7 @@ public class Main {
                                         String memberMention = DiscordUtilities.getMention(memberID);
                                         Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                                         Snowflake verifiedRole = guildDataMap.get(guildSnowflake).getVerifiedRoleID();
+                                        Snowflake unverifiedRole = guildDataMap.get(guildSnowflake).getUnverifiedRoleID();
                                         Snowflake verificationChannel = guildDataMap.get(guildSnowflake).getVerificationChannelID();
 
 
@@ -695,7 +696,7 @@ public class Main {
 
                                             Mono<Void> giveMemberVerifiedRole = event.getInteraction().getGuild()
                                                     .flatMap(guild -> guild.getMemberById(memberSnowflake))
-                                                    .flatMap(member -> member.addRole(verifiedRole));
+                                                    .flatMap(member -> member.addRole(verifiedRole).then(member.removeRole(unverifiedRole)));
 
 
                                             EmbedCreateSpec embed = EmbedCreateSpec.builder()
