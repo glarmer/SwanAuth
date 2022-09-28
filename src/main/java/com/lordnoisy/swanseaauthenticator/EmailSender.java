@@ -187,7 +187,7 @@ public class EmailSender {
                     }
                 }
         );
-        session.setDebug(true);
+        //session.setDebug(true);
 
         try {
             MimeMessage message = new MimeMessage(session);
