@@ -567,6 +567,10 @@ public class Main {
                                         .flatMap(hasAdmin -> {
                                             if (hasAdmin) {
                                                 //Enter the new configuration into the database
+                                                String guildID = guildSnowflake.asString();
+                                                if (!sqlRunner.dbHasGuild(guildID)) {
+                                                    sqlRunner.insertGuild(guildID);
+                                                }
                                                 if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, guildSnowflake.asString())) {
                                                     return event.editReply(SETUP_COMMAND_ERROR);
                                                 }

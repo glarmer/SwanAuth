@@ -17,6 +17,7 @@ public class SQLRunner {
     final private String CREATE_VERIFICATION_TOKENS_TABLE = "CREATE TABLE verification_tokens(" + "account_id int NOT NULL," + "guild_id varchar(255) NOT NULL," + "token varchar(20)," + "timestamp datetime DEFAULT CURRENT_TIMESTAMP()," + "FOREIGN KEY (account_id) REFERENCES accounts(account_id));" + "FOREIGN KEY (guild_id) REFERENCES guilds(guild_id));";
 
     //SELECT Statements
+    final private String SELECT_GUILD_SQL = "SELECT * FROM guilds WHERE guild_id = ?;";
     final private String SELECT_GUILDS_SQL = "SELECT * FROM guilds;";
     final private String SELECT_RECENT_VERIFICATION_TOKENS_SQL = "SELECT * FROM verification_tokens WHERE account_id = ? AND guild_id = ? AND timestamp > now() - interval 12 hour;";
     final private String SELECT_USER_BY_STUDENT_ID_SQL = "SELECT * FROM users WHERE student_id = ?;";
@@ -80,6 +81,17 @@ public class SQLRunner {
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    /**
+     * Check if a guild already has an entry in the db
+     * @param guildID the guild to check
+     * @return true if it exists, false otherwise
+     */
+    public boolean dbHasGuild (String guildID) {
+        ArrayList<String> parameters = new ArrayList<>();
+        parameters.add(guildID);
+        return isInTable(parameters, SELECT_GUILD_SQL);
     }
 
     /**
