@@ -285,7 +285,7 @@ public class Main {
                                     .ofType(GuildMessageChannel.class)
                                     .flatMap(channel -> channel.createMessage("Welcome to the server " + memberMention + " before you're able to fully interact with the server you need to verify your account. Start by entering your student number into the slash command \"/begin <student_number>\"!")).then();
                         }
-                        return addDefaultRoleOnJoin.and(sendMessageOnJoin);
+                        return sendMessageOnJoin.then(addDefaultRoleOnJoin);
                     }
                 }).then();
 
