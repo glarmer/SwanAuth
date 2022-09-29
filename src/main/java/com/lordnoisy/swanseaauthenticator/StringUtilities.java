@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 public class StringUtilities {
+    final static int TOKEN_LENGTH = 20;
 
     /**
      * Build a random string
@@ -22,6 +23,19 @@ public class StringUtilities {
         }
 
         return stringBuilder.toString();
+    }
+
+    /**
+     * Checks if a user entered code is potentially valid
+     * @param codeEntered the user entered code
+     * @return true if valid, false otherwise
+     */
+    public static boolean isValidPotentialToken(String codeEntered) {
+        if (codeEntered.matches("[a-zA-Z0-9]") && codeEntered.length() == TOKEN_LENGTH) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     public static String getDateTime() {

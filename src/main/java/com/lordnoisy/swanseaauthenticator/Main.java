@@ -406,6 +406,7 @@ public class Main {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
                         event.deferReply().withEphemeral(true).subscribe();
+                        String commandName = event.getCommandName();
                         Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                         String result = null;
                         if (!guildDataMap.containsKey(guildSnowflake)) {
@@ -414,7 +415,7 @@ public class Main {
                         boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() != null);
                         String discordID = event.getInteraction().getMember().get().getId().asString();
 
-                        if (event.getCommandName().equals(BEGIN_COMMAND_NAME)) {
+                        if (commandName.equals(BEGIN_COMMAND_NAME)) {
                             return event.getInteraction().getGuild()
                                     .map(Guild::getName)
                                     .flatMap(name -> {
@@ -474,7 +475,7 @@ public class Main {
                                                                 if (rows == -1) {
                                                                     resultToReturn = DATABASE_ERROR;
                                                                 } else if (rows < 3) {
-                                                                    String verificationCode = StringUtilities.getAlphaNumericString(20);
+                                                                    String verificationCode = StringUtilities.getAlphaNumericString(StringUtilities.TOKEN_LENGTH);
                                                                     if (emailSender.sendVerificationEmail(studentNumber, verificationCode, name)) {
                                                                         sqlRunner.insertVerificationToken(accountID, guildSnowflake.asString(), verificationCode);
                                                                     } else {
@@ -506,8 +507,11 @@ public class Main {
                                         return event.editReply(resultToReturn);
                                     });
                         }
-                        if (event.getCommandName().equals(VERIFY_COMMAND_NAME)) {
+                        if (commandName.equals(VERIFY_COMMAND_NAME)) {
                             String tokenInput = event.getOption(VERIFICATION_CODE_OPTION).get().getValue().get().asString();
+                            if (!StringUtilities.isValidPotentialToken(tokenInput)) {
+                                return event.editReply(INCORRECT_TOKEN_ERROR);
+                            }
                             if (isServerConfigured) {
                                 result = VERIFY_COMMAND_SUCCESS;
                                 Account account = sqlRunner.getAccountFromDiscordID(discordID);
@@ -546,7 +550,7 @@ public class Main {
                             }
                             return event.editReply(result);
                         }
-                        if (event.getCommandName().equals(SETUP_COMMAND_NAME)) {
+                        if (commandName.equals(SETUP_COMMAND_NAME)) {
                             //Get inputs
                             String verificationChannel = event.getOption(VERIFICATION_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
                             String adminChannel = event.getOption(ADMIN_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
@@ -612,10 +616,10 @@ public class Main {
                                 return event.editReply("There is an error with one of your options, please try again...");
                             }
                         }
-                        if (event.getCommandName().equals(HELP_COMMAND_NAME)) {
+                        if (commandName.equals(HELP_COMMAND_NAME)) {
                             result = HELP_COMMAND_SUCCESS;
                         }
-                        if (event.getCommandName().equals(NON_STUDENT_VERIFY_COMMAND_NAME)) {
+                        if (commandName.equals(NON_STUDENT_VERIFY_COMMAND_NAME)) {
                             String memberID = event.getInteraction().getMember().get().getId().asString();
                             if (isServerConfigured) {
                                 boolean hasVerifiedRole = event.getInteraction().getMember().get().getRoleIds().contains(guildDataMap.get(guildSnowflake).getVerifiedRoleID());
