@@ -31,7 +31,7 @@ public class StringUtilities {
      * @return true if valid, false otherwise
      */
     public static boolean isValidPotentialToken(String codeEntered) {
-        if (codeEntered.matches("[a-zA-Z0-9]") && codeEntered.length() == TOKEN_LENGTH) {
+        if (codeEntered.matches("[a-zA-Z0-9]+") && codeEntered.length() == TOKEN_LENGTH) {
             return true;
         } else {
             return false;

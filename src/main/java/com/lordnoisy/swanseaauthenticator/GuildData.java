@@ -11,6 +11,7 @@ public class GuildData {
     private Snowflake unverifiedRoleID;
     private Snowflake verifiedRoleID;
     private Snowflake adminChannelID;
+    private String mode;
 
     /**
      * Constructor for guild data class
@@ -22,7 +23,7 @@ public class GuildData {
      * @param unverifiedRoleID      the unverified role ID
      * @param verifiedRoleID        the verified role ID
      */
-    public GuildData(String guildID, String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID) {
+    public GuildData(String guildID, String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String mode) {
         this.guildID = Snowflake.of(guildID);
         if (verificationChannelID != null) {
             this.verificationChannelID = Snowflake.of(verificationChannelID);
@@ -36,6 +37,16 @@ public class GuildData {
         if (verifiedRoleID != null) {
             this.verifiedRoleID = Snowflake.of(verifiedRoleID);
         }
+        this.mode = mode;
+    }
+
+    /**
+     * Return a new unconfigured GuildData object
+     * @param guildID the ID of the guild
+     * @return unconfigured GuildData
+     */
+    public static GuildData emptyGuildData(String guildID) {
+        return new GuildData(guildID, null, null, null, null, "SLASH");
     }
 
     public Snowflake getVerificationChannelID() {
@@ -60,6 +71,14 @@ public class GuildData {
 
     public Snowflake getVerifiedRoleID() {
         return verifiedRoleID;
+    }
+
+    public String getMode() {
+        return mode;
+    }
+
+    public void setMode(String mode) {
+        this.mode = mode;
     }
 
     public void setVerifiedRoleID(Snowflake verifiedRoleID) {
