@@ -519,14 +519,13 @@ public class Main {
                                                     guildData.setMode("MODAL");
                                                 }
 
-                                                Mono applyRolesMono = Mono.empty();
+                                                Mono<Void> applyRolesMono = Mono.empty();
                                                 if (applyUnverified) {
                                                     applyRolesMono = gateway.getGuildMembers(guildSnowflake)
                                                             .collectList()
                                                             .flatMap(members -> {
                                                                 Mono<Void> addRoleToMembers = Mono.empty();
-                                                                for (int i = 0; i < members.size(); i++) {
-                                                                    Member member = members.get(i);
+                                                                for (Member member : members) {
                                                                     boolean hasUnverifiedRole = member.getRoleIds().contains(unverifiedRoleSnowflake);
                                                                     boolean hasVerifiedRole = member.getRoleIds().contains(verifiedRoleSnowflake);
 
@@ -749,6 +748,7 @@ public class Main {
                                     Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
                                             .map(member -> member.removeRole(guildDataMap.get(guildID).getUnverifiedRoleID()))
                                             .get();
+
 
                                     Mono<Void> addVerifiedRoleMono = event.getInteraction().getMember()
                                             .map(member -> member.addRole(guildDataMap.get(guildID).getVerifiedRoleID()))
