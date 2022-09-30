@@ -15,7 +15,7 @@ public class VerificationUtilities {
         boolean isServerConfigured = (guildData.getVerifiedRoleID() != null);
         if (isServerConfigured) {
             resultToReturn = BEGIN_COMMAND_SUCCESS_RESULT;
-            if (studentNumber.matches("\\d+")) {
+            if (studentNumber.matches("\\d+") && studentNumber.length() < 256) {
                 //Check that the user hasn't previously verified under a different student number
                 Account account = sqlRunner.getAccountFromDiscordID(discordID);
                 String userID;
