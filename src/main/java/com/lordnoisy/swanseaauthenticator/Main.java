@@ -32,10 +32,7 @@ import discord4j.rest.util.Permission;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Main {
 
@@ -90,6 +87,8 @@ public class Main {
     public static final String APPLY_UNVERIFIED_OPTION_DESCRIPTION = "Auto apply the unverified role to all users who don't already have it or the verified role.";
     public static final String DATABASE_ERROR = "There was an error contacting the database, please try again or contact the bot admin for help";
     public static final String DEFAULT_ERROR = "An error has occurred, please try again or contact an admin for help";
+    public static final String DM_ERROR = "You cannot verify in DMs! You need to go to the verification channel of the server you are trying to verify in :)";
+    public static final String EMAIL_ERROR = "There was an error sending the email, please try again or contact an admin for help";
     public static final String HAVE_NOT_BEGUN_ERROR = "You need to use the /begin command before trying to use /verify!";
     public static final String INCORRECT_COMMANDLINE_ARGUMENTS_ERROR = "You have entered the incorrect amount of command line arguments, please check that your mySQL and Email login is entered correctly.";
     public static final String INCORRECT_STUDENT_NUMBER_ERROR = "The student number you entered was incorrect, please try again! If you do not have a student number (e.g. if you are a staff member or alumni) please request verification with /nonstudentverify!";
@@ -108,20 +107,20 @@ public class Main {
     public static final String WAS_BANNED = " was banned";
     public static final String WAS_UNBANNED = " was unbanned";
 
-    //Buttons
+    //Buttons, Inputs and Modals
     public static final String BUTTON_ACCEPT = "accept";
     public static final String BUTTON_DENY = "deny";
+    public static final String BUTTON_FINISH_VERIFICATION = "finish_verification";
     public static final String BUTTON_ID = "swanauth";
-    public static final String EMAIL_ERROR = "There was an error sending the email, please try again or contact an admin for help";
     public static final String BUTTON_MODE_OPTION = "button_mode";
     public static final String BUTTON_MODE_OPTION_DESCRIPTION = "Select if users should be prompted to use a button instead of a slash command.";
     public static final String BUTTON_VERIFY = "verify";
-    public static final String MODAL_ID = "swanauthmodal";
+    public static final String INPUT_CODE = "verificationcode";
     public static final String INPUT_ID = "swanauthinput";
     public static final String INPUT_STUDENT = "studentnumber";
-    public static final String BUTTON_FINISH_VERIFICATION = "finish_verification";
     public static final String MODAL_FINISH_ID = "swanauthfinishmodal";
-    public static final String INPUT_CODE = "verificationcode";
+    public static final String MODAL_ID = "swanauthmodal";
+
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
     public static void main(String[] args) {
@@ -439,6 +438,13 @@ public class Main {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
                         event.deferReply().withEphemeral(true).subscribe();
+
+                        try {
+                            Member member = event.getInteraction().getMember().get();
+                        } catch (NoSuchElementException e) {
+                            return event.editReply(DM_ERROR);
+                        }
+
                         String commandName = event.getCommandName();
                         Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                         String result = null;
