@@ -518,18 +518,12 @@ public class SQLRunner {
      * @param guildID               the guild ID
      * @return true if successful, false otherwise
      */
-    public boolean updateGuildData(String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, boolean useButtons, String guildID) {
+    public boolean updateGuildData(String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String mode, String guildID) {
         ArrayList<String> parameters = new ArrayList<>();
         parameters.add(adminChannelID);
         parameters.add(verificationChannelID);
         parameters.add(unverifiedRoleID);
         parameters.add(verifiedRoleID);
-        String mode;
-        if (useButtons) {
-            mode = "MODAL";
-        } else {
-            mode = "SLASH";
-        }
         parameters.add(mode);
         parameters.add(guildID);
         return executeQuery(parameters, UPDATE_GUILD_DATA_SQL);

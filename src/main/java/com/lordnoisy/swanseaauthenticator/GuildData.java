@@ -33,6 +33,8 @@ public class GuildData {
         }
         if (unverifiedRoleID != null) {
             this.unverifiedRoleID = Snowflake.of(unverifiedRoleID);
+        } else {
+            this.unverifiedRoleID = null;
         }
         if (verifiedRoleID != null) {
             this.verifiedRoleID = Snowflake.of(verifiedRoleID);

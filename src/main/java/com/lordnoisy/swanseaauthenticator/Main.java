@@ -23,6 +23,7 @@ import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.Message;
 import discord4j.core.object.entity.channel.GuildMessageChannel;
 import discord4j.core.spec.*;
+import discord4j.discordjson.json.ApplicationCommandOptionChoiceData;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.json.ApplicationCommandRequest;
 import discord4j.gateway.intent.Intent;
@@ -112,7 +113,7 @@ public class Main {
     public static final String BUTTON_DENY = "deny";
     public static final String BUTTON_FINISH_VERIFICATION = "finish_verification";
     public static final String BUTTON_ID = "swanauth";
-    public static final String BUTTON_MODE_OPTION = "button_mode";
+    public static final String BUTTON_MODE_OPTION = "mode";
     public static final String BUTTON_MODE_OPTION_DESCRIPTION = "Select if users should be prompted to use a button instead of a slash command.";
     public static final String BUTTON_VERIFY = "verify";
     public static final String INPUT_CODE = "verificationcode";
@@ -120,6 +121,8 @@ public class Main {
     public static final String INPUT_STUDENT = "studentnumber";
     public static final String MODAL_FINISH_ID = "swanauthfinishmodal";
     public static final String MODAL_ID = "swanauthmodal";
+    public static final String BUTTON_MODE_SINGLE_OPTION = "single_button_mode";
+    public static final String BUTTON_MODE_SINGLE_OPTION_DESCRIPTION = "Set this to true if you would just like a single shared button, rather than individual buttons!";
 
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
@@ -184,6 +187,21 @@ public class Main {
                                 .build())
                         .build();
 
+                ApplicationCommandOptionChoiceData choiceData = ApplicationCommandOptionChoiceData.builder()
+                        .name("slash_commands")
+                        .value("SLASH")
+                        .build();
+                ApplicationCommandOptionChoiceData choiceData2 = ApplicationCommandOptionChoiceData.builder()
+                        .name("buttons")
+                        .value("MODAL")
+                        .build();
+                ApplicationCommandOptionChoiceData choiceData3 = ApplicationCommandOptionChoiceData.builder()
+                        .name("button_singular")
+                        .value("MODAL_SINGLE")
+                        .build();
+
+                List<ApplicationCommandOptionChoiceData> list = List.of(choiceData, choiceData2, choiceData3);
+
                 ApplicationCommandRequest setupCommand = ApplicationCommandRequest.builder()
                         .name(SETUP_COMMAND_NAME)
                         .description(SETUP_COMMAND_DESCRIPTION)
@@ -204,13 +222,6 @@ public class Main {
                                 .required(true)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
-                                .name(UNVERIFIED_ROLE_OPTION)
-                                .description(UNVERIFIED_ROLE_OPTION_DESCRIPTION)
-                                .type(ApplicationCommandOption.Type.ROLE.getValue())
-                                .maxLength(255)
-                                .required(true)
-                                .build())
-                        .addOption(ApplicationCommandOptionData.builder()
                                 .name(VERIFIED_ROLE_OPTION)
                                 .description(VERIFIED_ROLE_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.ROLE.getValue())
@@ -220,14 +231,22 @@ public class Main {
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name(BUTTON_MODE_OPTION)
                                 .description(BUTTON_MODE_OPTION_DESCRIPTION)
-                                .type(ApplicationCommandOption.Type.BOOLEAN.getValue())
+                                .type(ApplicationCommandOption.Type.STRING.getValue())
+                                .choices(list)
                                 .required(true)
+                                .build())
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name(UNVERIFIED_ROLE_OPTION)
+                                .description(UNVERIFIED_ROLE_OPTION_DESCRIPTION)
+                                .type(ApplicationCommandOption.Type.ROLE.getValue())
+                                .maxLength(255)
+                                .required(false)
                                 .build())
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name(APPLY_UNVERIFIED_OPTION)
                                 .description(APPLY_UNVERIFIED_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.BOOLEAN.getValue())
-                                .required(true)
+                                .required(false)
                                 .build())
                         .build();
 
@@ -289,11 +308,22 @@ public class Main {
                                 sendMessageOnJoin = gateway.getChannelById(verificationChannelID)
                                         .ofType(GuildMessageChannel.class)
                                         .flatMap(channel -> channel.createMessage("Welcome to the server " + memberMention + "! I can see that you've already verified here before so I've assigned you the verified role!")).then();
+
+                                if(mode.equals("MODAL_SINGLE")) {
+                                    //Don't send a message since we just want a singular button
+                                    return addDefaultRoleOnJoin;
+                                }
+                                return sendMessageOnJoin.then(addDefaultRoleOnJoin);
                             } else {
                                 Mono<Void> banMemberMono = member.ban().then();
                                 sendMessageOnJoin = gateway.getChannelById(adminChannelID)
                                         .ofType(GuildMessageChannel.class)
                                         .flatMap(channel -> channel.createMessage(memberMention + ", who was verified on another account tried to join the server, as a result they have been banned.")).then();
+
+                                if(mode.equals("MODAL_SINGLE")) {
+                                    //Don't send a message since we just want a singular button
+                                    return banMemberMono;
+                                }
                                 return banMemberMono.and(sendMessageOnJoin);
                             }
                         } else {
@@ -316,6 +346,13 @@ public class Main {
                                         .flatMap(channel -> channel.createMessage(message)).then();
 
                             }
+                        }
+                        if(unverifiedRoleID == null) {
+                            addDefaultRoleOnJoin = Mono.empty();
+                        }
+                        if(mode.equals("MODAL_SINGLE")) {
+                            //Don't send a message since we just want a singular button
+                            return addDefaultRoleOnJoin;
                         }
                         return sendMessageOnJoin.then(addDefaultRoleOnJoin);
                     }
@@ -489,16 +526,36 @@ public class Main {
                             //Get inputs
                             String verificationChannel = event.getOption(VERIFICATION_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
                             String adminChannel = event.getOption(ADMIN_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
-                            String unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
+                            String unverifiedRole;
+                            try {
+                                unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
+                            } catch (NoSuchElementException e) {
+                                unverifiedRole = null;
+                            }
+                            boolean applyUnverified;
+                            try {
+                                applyUnverified = event.getOption(APPLY_UNVERIFIED_OPTION).get().getValue().get().asBoolean();
+                            } catch (NoSuchElementException e) {
+                                applyUnverified = false;
+                            }
                             String verifiedRole = event.getOption(VERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
-                            boolean applyUnverified = event.getOption(APPLY_UNVERIFIED_OPTION).get().getValue().get().asBoolean();
-                            boolean useButtons = event.getOption(BUTTON_MODE_OPTION).get().getValue().get().asBoolean();
+
+                            String mode = event.getOption(BUTTON_MODE_OPTION).get().getValue().get().asString();
+                            if (!(mode.equals("SLASH") || mode.equals("MODAL") || mode.equals("MODAL_SINGLE"))) {
+                                return event.editReply("You have not entered a correct mode!");
+                            }
 
                             try {
                                 Snowflake verificationChannelSnowflake = Snowflake.of(verificationChannel);
                                 Snowflake adminChannelSnowflake = Snowflake.of(adminChannel);
-                                Snowflake unverifiedRoleSnowflake = Snowflake.of(unverifiedRole);
+                                Snowflake unverifiedRoleSnowflake = null;
+                                if (!(unverifiedRole == null)) {
+                                    unverifiedRoleSnowflake = Snowflake.of(unverifiedRole);
+                                }
                                 Snowflake verifiedRoleSnowflake = Snowflake.of(verifiedRole);
+                                Snowflake finalUnverifiedRoleSnowflake = unverifiedRoleSnowflake;
+                                String finalUnverifiedRole = unverifiedRole;
+                                boolean finalApplyUnverified = applyUnverified;
                                 return event.getInteraction()
                                         .getMember()
                                         .get()
@@ -511,7 +568,8 @@ public class Main {
                                                 if (!sqlRunner.dbHasGuild(guildID)) {
                                                     sqlRunner.insertGuild(guildID);
                                                 }
-                                                if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, unverifiedRole, verifiedRole, useButtons, guildSnowflake.asString())) {
+
+                                                if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, finalUnverifiedRole, verifiedRole, mode, guildSnowflake.asString())) {
                                                     return event.editReply(SETUP_COMMAND_ERROR);
                                                 }
 
@@ -519,24 +577,22 @@ public class Main {
                                                 GuildData guildData = guildDataMap.get(guildSnowflake);
                                                 guildData.setAdminChannelID(adminChannelSnowflake);
                                                 guildData.setVerificationChannelID(verificationChannelSnowflake);
-                                                guildData.setUnverifiedRoleID(unverifiedRoleSnowflake);
+                                                guildData.setUnverifiedRoleID(finalUnverifiedRoleSnowflake);
                                                 guildData.setVerifiedRoleID(verifiedRoleSnowflake);
-                                                if (useButtons) {
-                                                    guildData.setMode("MODAL");
-                                                }
+                                                guildData.setMode(mode);
 
                                                 Mono<Void> applyRolesMono = Mono.empty();
-                                                if (applyUnverified) {
+                                                if (finalApplyUnverified) {
                                                     applyRolesMono = gateway.getGuildMembers(guildSnowflake)
                                                             .collectList()
                                                             .flatMap(members -> {
                                                                 Mono<Void> addRoleToMembers = Mono.empty();
                                                                 for (Member member : members) {
-                                                                    boolean hasUnverifiedRole = member.getRoleIds().contains(unverifiedRoleSnowflake);
+                                                                    boolean hasUnverifiedRole = member.getRoleIds().contains(finalUnverifiedRoleSnowflake);
                                                                     boolean hasVerifiedRole = member.getRoleIds().contains(verifiedRoleSnowflake);
 
                                                                     if (!hasUnverifiedRole && !hasVerifiedRole) {
-                                                                        Mono<Void> addRoleToMember = member.addRole(unverifiedRoleSnowflake);
+                                                                        Mono<Void> addRoleToMember = member.addRole(finalUnverifiedRoleSnowflake);
                                                                         addRoleToMembers = addRoleToMembers.and(addRoleToMember);
                                                                     }
                                                                 }
@@ -545,7 +601,21 @@ public class Main {
                                                             .then();
                                                 }
 
-                                                return event.editReply(SETUP_COMMAND_SUCCESS).and(applyRolesMono);
+                                                Mono<Void> sendVerificationMessage = Mono.empty();
+                                                if (mode.equals("MODAL_SINGLE")) {
+                                                    Button button = Button.primary(BUTTON_ID + ":" + BUTTON_VERIFY + ":" + "null", "Verify");
+                                                    EmbedCreateSpec embedCreateSpec = EmbedCreateSpec.builder()
+                                                            .title("SwanAuth Verification")
+                                                            .description("In order to fully participate within the server you need to verify your account. Start by pressing the verify button below!")
+                                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + StringUtilities.getDateTime(), FOOTER_ICON_URL))
+                                                            .color(EMBED_COLOUR)
+                                                            .build();
+
+                                                    sendVerificationMessage = gateway.getChannelById(verificationChannelSnowflake)
+                                                            .ofType(GuildMessageChannel.class)
+                                                            .flatMap(channel -> channel.createMessage(embedCreateSpec).withComponents(ActionRow.of(button)).then());
+                                                }
+                                                return event.editReply(SETUP_COMMAND_SUCCESS).and(applyRolesMono).and(sendVerificationMessage);
                                             } else {
                                                 return event.editReply(INSUFFICIENT_PERMISSIONS_ERROR);
                                             }
@@ -612,7 +682,7 @@ public class Main {
                     if (event.getCustomId().startsWith(BUTTON_ID)) {
                         String[] buttonInfo = event.getCustomId().split(":");
                         String buttonPressed = buttonInfo[1];
-                        Snowflake memberSnowflake = Snowflake.of(buttonInfo[2]);
+                        Snowflake memberSnowflake = event.getInteraction().getMember().get().getId();
                         String memberID = memberSnowflake.asString();
                         return event.getInteraction()
                                 .getMember()
@@ -751,10 +821,13 @@ public class Main {
                                 boolean isServerConfigured = (guildData.getVerifiedRoleID() != null);
                                 String result = VerificationUtilities.finaliseVerification(verificationCode, isServerConfigured, sqlRunner, memberID, guildID);
                                 if (result.equals(VERIFY_COMMAND_SUCCESS)) {
-                                    Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
-                                            .map(member -> member.removeRole(guildDataMap.get(guildID).getUnverifiedRoleID()))
-                                            .get();
 
+                                    Mono<Void> removeUnverifiedRoleMono = Mono.empty();
+                                    if (!(guildData.getUnverifiedRoleID() == null)) {
+                                        removeUnverifiedRoleMono = event.getInteraction().getMember()
+                                                .map(member -> member.removeRole(guildDataMap.get(guildID).getUnverifiedRoleID()))
+                                                .get();
+                                    }
 
                                     Mono<Void> addVerifiedRoleMono = event.getInteraction().getMember()
                                             .map(member -> member.addRole(guildDataMap.get(guildID).getVerifiedRoleID()))

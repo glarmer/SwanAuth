@@ -154,8 +154,7 @@ public class EmailSender {
         String studentEmail = studentNumber + "@swansea.ac.uk";
         String subjectHeader = guildName + " Discord Server Verification";
         String body = EMAIL_PART_ONE + "Your verification code for the \"" + guildName + "\" Discord server is: " +
-                verificationString + ".<br><br> To finish your verification, use the /verify command by" +
-                " typing in chat the following: /verify " + verificationString + EMAIL_PART_TWO;
+                verificationString + ".<br><br> To finish your verification, follow the instructions given by the bot!" + EMAIL_PART_TWO;
 
         return this.sendMail(studentEmail, subjectHeader, body);
     }
