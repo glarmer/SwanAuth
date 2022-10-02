@@ -527,15 +527,16 @@ public class Main {
                             String verificationChannel = event.getOption(VERIFICATION_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
                             String adminChannel = event.getOption(ADMIN_CHANNEL_OPTION).get().getValue().get().asSnowflake().asString();
                             String unverifiedRole;
-                            try {
-                                unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
-                            } catch (NoSuchElementException e) {
-                                unverifiedRole = null;
-                            }
                             boolean applyUnverified;
                             try {
                                 applyUnverified = event.getOption(APPLY_UNVERIFIED_OPTION).get().getValue().get().asBoolean();
                             } catch (NoSuchElementException e) {
+                                applyUnverified = false;
+                            }
+                            try {
+                                unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
+                            } catch (NoSuchElementException e) {
+                                unverifiedRole = null;
                                 applyUnverified = false;
                             }
                             String verifiedRole = event.getOption(VERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
