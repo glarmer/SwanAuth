@@ -80,7 +80,7 @@ public class Main {
     public static final String USER_IS_BANNED_RESULT = "This user has been banned on a different Discord account, and so is no longer allowed on this server...";
 
     //Success Messages
-    public static final String HELP_COMMAND_SUCCESS = "To begin verification run /verify! Admins can run /setup to configure the bot!";
+    public static final String HELP_COMMAND_SUCCESS = "To begin verification run /begin! Admins can run /setup to configure the bot!";
     public static final String MANUAL_VERIFICATION_COMMAND_SUCCESS = "Your manual verification request has been sent to the admins!";
     public static final String SETUP_COMMAND_SUCCESS = "You have successfully configured the bot!";
     public static final String VERIFY_COMMAND_SUCCESS = "You have successfully verified!";
