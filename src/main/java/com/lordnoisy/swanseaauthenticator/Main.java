@@ -683,7 +683,14 @@ public class Main {
                     if (event.getCustomId().startsWith(BUTTON_ID)) {
                         String[] buttonInfo = event.getCustomId().split(":");
                         String buttonPressed = buttonInfo[1];
-                        Snowflake memberSnowflake = event.getInteraction().getMember().get().getId();
+                        String memberString = buttonInfo[2];
+                        Snowflake memberSnowflake;
+                        if (memberString.equals("null")) {
+                            memberSnowflake = event.getInteraction().getMember().get().getId();
+                        } else {
+                            memberSnowflake = Snowflake.of(memberString);
+                        }
+
                         String memberID = memberSnowflake.asString();
                         return event.getInteraction()
                                 .getMember()
@@ -728,10 +735,12 @@ public class Main {
                                                     .flatMap(channel -> channel.createMessage(memberMention + " - Your manual verification has been completed!"))
                                                     .then();
 
-                                            Mono<Void> giveMemberVerifiedRole = event.getInteraction().getGuild()
-                                                    .flatMap(guild -> guild.getMemberById(memberSnowflake))
-                                                    .flatMap(member -> member.addRole(verifiedRole).then(member.removeRole(unverifiedRole)));
-
+                                            Mono<Void> giveMemberVerifiedRole = Mono.empty();
+                                            if (!(unverifiedRole == null)) {
+                                                giveMemberVerifiedRole = event.getInteraction().getGuild()
+                                                        .flatMap(guild -> guild.getMemberById(memberSnowflake))
+                                                        .flatMap(member -> member.addRole(verifiedRole).then(member.removeRole(unverifiedRole)));
+                                            }
 
                                             EmbedCreateSpec embed = EmbedCreateSpec.builder()
                                                     .title("A user has been accepted for manual verification!")
