@@ -41,10 +41,10 @@ public class GuildData {
             this.verifiedRoleID = Snowflake.of(verifiedRoleID);
         }
         this.mode = mode;
-        if (verificationLogging != null) {
-            this.verificationLogging = verificationLogging;
-        } else {
+        if (verificationLogging == null) {
             this.verificationLogging = "DISABLED";
+        } else {
+            this.verificationLogging = verificationLogging;
         }
     }
 
@@ -54,7 +54,7 @@ public class GuildData {
      * @return unconfigured GuildData
      */
     public static GuildData emptyGuildData(String guildID) {
-        return new GuildData(guildID, null, null, null, null, "SLASH", null);
+        return new GuildData(guildID, null, null, null, null, "SLASH", "DISABLED");
     }
 
     public Snowflake getVerificationChannelID() {
@@ -94,7 +94,11 @@ public class GuildData {
     }
 
     public void setVerificationLogging(String verificationLogging) {
-        this.verificationLogging = verificationLogging;
+        if (verificationLogging == null) {
+            this.verificationLogging = "DISABLED";
+        } else {
+            this.verificationLogging = verificationLogging;
+        }
     }
 
     public void setVerifiedRoleID(Snowflake verifiedRoleID) {

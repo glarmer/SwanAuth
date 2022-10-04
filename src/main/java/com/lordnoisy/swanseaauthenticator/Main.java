@@ -599,7 +599,7 @@ public class Main {
                                                     sqlRunner.insertGuild(guildID);
                                                 }
 
-                                                String verificationLogging = null;
+                                                String verificationLogging = "DISABLED";
                                                 if (finalIsVerificationLoggingEnabled) {
                                                     verificationLogging = "ENABLED";
                                                 }
