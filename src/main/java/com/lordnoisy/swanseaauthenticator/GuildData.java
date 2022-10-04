@@ -12,6 +12,7 @@ public class GuildData {
     private Snowflake verifiedRoleID;
     private Snowflake adminChannelID;
     private String mode;
+    private String verificationLogging;
 
     /**
      * Constructor for guild data class
@@ -23,7 +24,7 @@ public class GuildData {
      * @param unverifiedRoleID      the unverified role ID
      * @param verifiedRoleID        the verified role ID
      */
-    public GuildData(String guildID, String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String mode) {
+    public GuildData(String guildID, String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String mode, String verificationLogging) {
         this.guildID = Snowflake.of(guildID);
         if (verificationChannelID != null) {
             this.verificationChannelID = Snowflake.of(verificationChannelID);
@@ -40,6 +41,11 @@ public class GuildData {
             this.verifiedRoleID = Snowflake.of(verifiedRoleID);
         }
         this.mode = mode;
+        if (verificationLogging != null) {
+            this.verificationLogging = verificationLogging;
+        } else {
+            this.verificationLogging = "DISABLED";
+        }
     }
 
     /**
@@ -48,7 +54,7 @@ public class GuildData {
      * @return unconfigured GuildData
      */
     public static GuildData emptyGuildData(String guildID) {
-        return new GuildData(guildID, null, null, null, null, "SLASH");
+        return new GuildData(guildID, null, null, null, null, "SLASH", null);
     }
 
     public Snowflake getVerificationChannelID() {
@@ -79,8 +85,16 @@ public class GuildData {
         return mode;
     }
 
+    public String getVerificationLogging() {
+        return verificationLogging;
+    }
+
     public void setMode(String mode) {
         this.mode = mode;
+    }
+
+    public void setVerificationLogging(String verificationLogging) {
+        this.verificationLogging = verificationLogging;
     }
 
     public void setVerifiedRoleID(Snowflake verifiedRoleID) {

@@ -96,13 +96,13 @@ public class VerificationUtilities {
         return resultToReturn;
     }
 
-    public static String finaliseVerification(String tokenInput, boolean isServerConfigured, SQLRunner sqlRunner, String discordID, Snowflake guildSnowflake) {
+    public static String finaliseVerification(String tokenInput, boolean isServerConfigured, SQLRunner sqlRunner, String memberID, Snowflake guildSnowflake) {
         String result;
         if (!StringUtilities.isValidPotentialToken(tokenInput)) {
             return INCORRECT_TOKEN_ERROR;
         }
         if (isServerConfigured) {
-            Account account = sqlRunner.getAccountFromDiscordID(discordID);
+            Account account = sqlRunner.getAccountFromDiscordID(memberID);
             if (account == null) {
                 return HAVE_NOT_BEGUN_ERROR;
             } else {

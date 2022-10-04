@@ -16,6 +16,7 @@ public class SQLRunner {
             + "unverified_role_id varchar(255),"
             + "verified_role_id varchar(255),"
             + "mode varchar(255),"
+            + "verification_logging varchar(255),"
             + "PRIMARY KEY (guild_id));";
     final private String CREATE_USERS_TABLE_SQL = "CREATE TABLE users(" + "user_id int NOT NULL AUTO_INCREMENT," + "student_id varchar(255)," + "PRIMARY KEY(user_id));";
     final private String CREATE_ACCOUNTS_TABLE_SQL = "CREATE TABLE accounts(" + "account_id int NOT NULL AUTO_INCREMENT," + "user_id int NOT NULL," + "discord_id varchar(255)," + "FOREIGN KEY (user_id) REFERENCES users(user_id)," + "PRIMARY KEY(account_id));";
@@ -47,7 +48,7 @@ public class SQLRunner {
 
 
     //Update Statements
-    final private String UPDATE_GUILD_DATA_SQL = "UPDATE guilds SET admin_channel_id = ?, verification_channel_id = ?, unverified_role_id = ?, verified_role_id = ?, mode = ? WHERE guild_id = ?;";
+    final private String UPDATE_GUILD_DATA_SQL = "UPDATE guilds SET admin_channel_id = ?, verification_channel_id = ?, unverified_role_id = ?, verified_role_id = ?, mode = ?, verification_logging = ? WHERE guild_id = ?;";
     final private String UPDATE_ACCOUNT_SQL = "UPDATE accounts SET user_id = ? WHERE account_id = ?;";
 
     //Delete Statements
@@ -281,7 +282,8 @@ public class SQLRunner {
                 String currentUnverifiedRoleID = results.getString(4);
                 String currentVerifiedRoleID = results.getString(5);
                 String mode = results.getString(6);
-                GuildData guildData = new GuildData(currentGuildID, currentAdminChannelID, currentVerificationChannelID, currentUnverifiedRoleID, currentVerifiedRoleID, mode);
+                String verificationLogging = results.getString(7);
+                GuildData guildData = new GuildData(currentGuildID, currentAdminChannelID, currentVerificationChannelID, currentUnverifiedRoleID, currentVerifiedRoleID, mode, verificationLogging);
                 guildDataMap.put(Snowflake.of(currentGuildID), guildData);
             }
             return true;
@@ -518,13 +520,14 @@ public class SQLRunner {
      * @param guildID               the guild ID
      * @return true if successful, false otherwise
      */
-    public boolean updateGuildData(String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String mode, String guildID) {
+    public boolean updateGuildData(String adminChannelID, String verificationChannelID, String unverifiedRoleID, String verifiedRoleID, String mode, String verificationLogging, String guildID) {
         ArrayList<String> parameters = new ArrayList<>();
         parameters.add(adminChannelID);
         parameters.add(verificationChannelID);
         parameters.add(unverifiedRoleID);
         parameters.add(verifiedRoleID);
         parameters.add(mode);
+        parameters.add(verificationLogging);
         parameters.add(guildID);
         return executeQuery(parameters, UPDATE_GUILD_DATA_SQL);
     }

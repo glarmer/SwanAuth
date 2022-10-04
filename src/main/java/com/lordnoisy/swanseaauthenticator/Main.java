@@ -123,6 +123,10 @@ public class Main {
     public static final String MODAL_ID = "swanauthmodal";
     public static final String BUTTON_MODE_SINGLE_OPTION = "single_button_mode";
     public static final String BUTTON_MODE_SINGLE_OPTION_DESCRIPTION = "Set this to true if you would just like a single shared button, rather than individual buttons!";
+    public static final String VERIFICATION_LOGGING_OPTION = "verification_logging";
+    public static final String VERIFICATION_LOGGING_OPTION_DESCRIPTION = "Enables logging in the admin channel for when people attempt verification!";
+    public static final String BEGIN = "BEGIN";
+    public static final String FINAL = "FINAL";
 
 
     //0 Token 1 MYSQL URL 2 MYSQL Username 3 MYSQL password 4 Email Host 5 Email port 6 Email username 7 Email password 8 Sender Email Address
@@ -245,6 +249,12 @@ public class Main {
                         .addOption(ApplicationCommandOptionData.builder()
                                 .name(APPLY_UNVERIFIED_OPTION)
                                 .description(APPLY_UNVERIFIED_OPTION_DESCRIPTION)
+                                .type(ApplicationCommandOption.Type.BOOLEAN.getValue())
+                                .required(false)
+                                .build())
+                        .addOption(ApplicationCommandOptionData.builder()
+                                .name(VERIFICATION_LOGGING_OPTION)
+                                .description(VERIFICATION_LOGGING_OPTION_DESCRIPTION)
                                 .type(ApplicationCommandOption.Type.BOOLEAN.getValue())
                                 .required(false)
                                 .build())
@@ -482,14 +492,18 @@ public class Main {
                             return event.editReply(DM_ERROR);
                         }
 
+                        String memberID = event.getInteraction().getMember().get().getId().asString();
+
                         String commandName = event.getCommandName();
                         Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
                         String result = null;
                         if (!guildDataMap.containsKey(guildSnowflake)) {
                             guildDataMap.put(guildSnowflake, GuildData.emptyGuildData(guildSnowflake.asString()));
                         }
+                        GuildData guildData = guildDataMap.get(guildSnowflake);
+
+
                         boolean isServerConfigured = (guildDataMap.get(guildSnowflake).getVerifiedRoleID() != null);
-                        String discordID = event.getInteraction().getMember().get().getId().asString();
 
                         if (commandName.equals(BEGIN_COMMAND_NAME)) {
                             String studentNumber = event.getOption(STUDENT_ID_OPTION).get().getValue().get().asString();
@@ -501,12 +515,20 @@ public class Main {
                                             Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
                                             return event.editReply(resultToReturn).and(ban);
                                         }
+                                        if (guildData.getVerificationLogging().equals("ENABLED")) {
+                                            Mono<Void> sendAdminMessage = DiscordUtilities.getVerificationLoggingMono(guildData, memberID, resultToReturn, gateway, BEGIN);
+
+                                            return event.editReply(resultToReturn).then(sendAdminMessage);
+                                        }
                                         return event.editReply(resultToReturn);
                                     });
                         }
                         if (commandName.equals(VERIFY_COMMAND_NAME)) {
                             String tokenInput = event.getOption(VERIFICATION_CODE_OPTION).get().getValue().get().asString();
-                            result = VerificationUtilities.finaliseVerification(tokenInput, isServerConfigured, sqlRunner, discordID, guildSnowflake);
+                            result = VerificationUtilities.finaliseVerification(tokenInput, isServerConfigured, sqlRunner, memberID, guildSnowflake);
+
+                            Mono<Void> sendAdminMessage = DiscordUtilities.getVerificationLoggingMono(guildData, memberID, result, gateway, FINAL);
+
                             if (result.equals(VERIFY_COMMAND_SUCCESS)) {
                                 Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
                                         .map(member -> member.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
@@ -517,9 +539,9 @@ public class Main {
                                         .map(member -> member.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID()))
                                         .get()
                                         .then();
-                                return event.editReply(result).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono);
+                                return event.editReply(result).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono).then(sendAdminMessage);
                             } else {
-                                return event.editReply(result);
+                                return event.editReply(result).then(sendAdminMessage);
                             }
                         }
                         if (commandName.equals(SETUP_COMMAND_NAME)) {
@@ -532,6 +554,12 @@ public class Main {
                                 applyUnverified = event.getOption(APPLY_UNVERIFIED_OPTION).get().getValue().get().asBoolean();
                             } catch (NoSuchElementException e) {
                                 applyUnverified = false;
+                            }
+                            boolean isVerificationLoggingEnabled;
+                            try {
+                                isVerificationLoggingEnabled = event.getOption(VERIFICATION_LOGGING_OPTION).get().getValue().get().asBoolean();
+                            } catch (NoSuchElementException e) {
+                                isVerificationLoggingEnabled = false;
                             }
                             try {
                                 unverifiedRole = event.getOption(UNVERIFIED_ROLE_OPTION).get().getValue().get().asSnowflake().asString();
@@ -557,6 +585,7 @@ public class Main {
                                 Snowflake finalUnverifiedRoleSnowflake = unverifiedRoleSnowflake;
                                 String finalUnverifiedRole = unverifiedRole;
                                 boolean finalApplyUnverified = applyUnverified;
+                                boolean finalIsVerificationLoggingEnabled = isVerificationLoggingEnabled;
                                 return event.getInteraction()
                                         .getMember()
                                         .get()
@@ -570,17 +599,22 @@ public class Main {
                                                     sqlRunner.insertGuild(guildID);
                                                 }
 
-                                                if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, finalUnverifiedRole, verifiedRole, mode, guildSnowflake.asString())) {
+                                                String verificationLogging = null;
+                                                if (finalIsVerificationLoggingEnabled) {
+                                                    verificationLogging = "ENABLED";
+                                                }
+
+                                                if (!sqlRunner.updateGuildData(adminChannel, verificationChannel, finalUnverifiedRole, verifiedRole, mode, verificationLogging, guildSnowflake.asString())) {
                                                     return event.editReply(SETUP_COMMAND_ERROR);
                                                 }
 
                                                 //Edit the existing GuildData for this server
-                                                GuildData guildData = guildDataMap.get(guildSnowflake);
                                                 guildData.setAdminChannelID(adminChannelSnowflake);
                                                 guildData.setVerificationChannelID(verificationChannelSnowflake);
                                                 guildData.setUnverifiedRoleID(finalUnverifiedRoleSnowflake);
                                                 guildData.setVerifiedRoleID(verifiedRoleSnowflake);
                                                 guildData.setMode(mode);
+                                                guildData.setVerificationLogging(verificationLogging);
 
                                                 Mono<Void> applyRolesMono = Mono.empty();
                                                 if (finalApplyUnverified) {
@@ -629,7 +663,6 @@ public class Main {
                             result = HELP_COMMAND_SUCCESS;
                         }
                         if (commandName.equals(NON_STUDENT_VERIFY_COMMAND_NAME)) {
-                            String memberID = event.getInteraction().getMember().get().getId().asString();
                             if (isServerConfigured) {
                                 boolean hasVerifiedRole = event.getInteraction().getMember().get().getRoleIds().contains(guildDataMap.get(guildSnowflake).getVerifiedRoleID());
                                 if (!hasVerifiedRole) {
@@ -805,6 +838,7 @@ public class Main {
                                 return event.getInteraction().getGuild()
                                         .map(Guild::getName)
                                         .flatMap(name -> {
+                                            String memberID = event.getInteraction().getMember().get().getId().asString();
                                             String resultToReturn = VerificationUtilities.beginVerification(guildDataMap.get(guildSnowflake), studentNumber, sqlRunner, event.getInteraction().getMember().get(), emailSender, name);
                                             if (resultToReturn.equals(USER_IS_BANNED_RESULT)) {
                                                 Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
@@ -812,8 +846,13 @@ public class Main {
                                             }
                                             if (resultToReturn.equals(BEGIN_COMMAND_SUCCESS_RESULT)) {
                                                 resultToReturn = BEGIN_COMMAND_SUCCESS_RESULT_MODAL;
-                                                Button button = Button.primary(BUTTON_ID + ":" + BUTTON_FINISH_VERIFICATION + ":" + event.getInteraction().getMember().get().getId().asString(), "Enter Verification Code");
-                                                return event.reply(resultToReturn).withComponents(ActionRow.of(button)).withEphemeral(true);
+                                                Button button = Button.primary(BUTTON_ID + ":" + BUTTON_FINISH_VERIFICATION + ":" + memberID, "Enter Verification Code");
+
+                                                GuildData guildData = guildDataMap.get(guildSnowflake);
+
+                                                Mono<Void> sendAdminMessage = DiscordUtilities.getVerificationLoggingMono(guildData, memberID, resultToReturn, gateway, BEGIN);
+
+                                                return event.reply(resultToReturn).withComponents(ActionRow.of(button)).withEphemeral(true).then(sendAdminMessage);
                                             } else {
                                                 return event.reply(resultToReturn).withEphemeral(true);
                                             }
@@ -830,6 +869,7 @@ public class Main {
                                 GuildData guildData = guildDataMap.get(guildID);
                                 boolean isServerConfigured = (guildData.getVerifiedRoleID() != null);
                                 String result = VerificationUtilities.finaliseVerification(verificationCode, isServerConfigured, sqlRunner, memberID, guildID);
+                                Mono<Void> sendAdminMessage = DiscordUtilities.getVerificationLoggingMono(guildData, memberID, result, gateway, FINAL);
                                 if (result.equals(VERIFY_COMMAND_SUCCESS)) {
 
                                     Mono<Void> removeUnverifiedRoleMono = Mono.empty();
@@ -843,9 +883,9 @@ public class Main {
                                             .map(member -> member.addRole(guildDataMap.get(guildID).getVerifiedRoleID()))
                                             .get();
 
-                                    return event.reply(result).withEphemeral(true).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono);
+                                    return event.reply(result).withEphemeral(true).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono).then(sendAdminMessage);
                                 } else {
-                                    return event.reply(result).withEphemeral(true);
+                                    return event.reply(result).withEphemeral(true).then(sendAdminMessage);
                                 }
                             }
                         }
