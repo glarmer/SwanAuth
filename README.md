@@ -13,6 +13,7 @@ Required:
 - admin_channel - the channel where any logging from the bot goes, it is also where manual verification requests go;
 - verified_role - the role which is applied to users when they verify;
 - mode - this lets you select the way the bot operates, you can set it to use slash commands, buttons, or a singular pinned button.
+
 Optional:
 - unverified_role - this role gets applied when a user joins the server, having this set up will bypass default discord security measures;
 - apply_unverified_role - if set to true this will slowly trawl through the member list applying the unverified role to users;
