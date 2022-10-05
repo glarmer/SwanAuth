@@ -1,4 +1,4 @@
-# Swansea_Authenticator
+# SwanAuth
 A unofficial Discord Authenticator bot for Swansea University servers to verify members. This bot is in no way affiliated with Swansea University.
 
 This readme is entirely temporary, but below is a quick outline of how you can set the bot up in a server.
