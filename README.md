@@ -1,7 +1,7 @@
-# Swansea_Authenticator
+# SwanAuth
 A unofficial Discord Authenticator bot for Swansea University servers to verify members. This bot is in no way affiliated with Swansea University.
 
-This readme is entirely temporary, but below is a quick outline of how you can set the bot up in a server.
+This readme is temporary, but below is a quick outline of how you can set the bot up in a server.
 
 1.) Invite the bot (https://discord.com/api/oauth2/authorize?client_id=1022933651341709425&permissions=268437636&scope=bot%20applications.commands)
 
@@ -13,6 +13,7 @@ Required:
 - admin_channel - the channel where any logging from the bot goes, it is also where manual verification requests go;
 - verified_role - the role which is applied to users when they verify;
 - mode - this lets you select the way the bot operates, you can set it to use slash commands, buttons, or a singular pinned button.
+
 Optional:
 - unverified_role - this role gets applied when a user joins the server, having this set up will bypass default discord security measures;
 - apply_unverified_role - if set to true this will slowly trawl through the member list applying the unverified role to users;
