@@ -32,6 +32,8 @@ import discord4j.rest.util.Color;
 import discord4j.rest.util.Permission;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
+import reactor.util.annotation.NonNull;
+import reactor.util.annotation.NonNullApi;
 
 import java.util.*;
 
@@ -121,8 +123,6 @@ public class Main {
     public static final String INPUT_STUDENT = "studentnumber";
     public static final String MODAL_FINISH_ID = "swanauthfinishmodal";
     public static final String MODAL_ID = "swanauthmodal";
-    public static final String BUTTON_MODE_SINGLE_OPTION = "single_button_mode";
-    public static final String BUTTON_MODE_SINGLE_OPTION_DESCRIPTION = "Set this to true if you would just like a single shared button, rather than individual buttons!";
     public static final String VERIFICATION_LOGGING_OPTION = "verification_logging";
     public static final String VERIFICATION_LOGGING_OPTION_DESCRIPTION = "Enables logging in the admin channel for when people attempt verification!";
     public static final String BEGIN = "BEGIN";
@@ -357,9 +357,6 @@ public class Main {
 
                             }
                         }
-                        if(unverifiedRoleID == null) {
-                            addDefaultRoleOnJoin = Mono.empty();
-                        }
                         if(mode.equals("MODAL_SINGLE")) {
                             //Don't send a message since we just want a singular button
                             return addDefaultRoleOnJoin;
@@ -484,12 +481,13 @@ public class Main {
                 Mono<Void> actOnSlashCommand = gateway.on(new ReactiveEventAdapter() {
                     @Override
                     public Publisher<?> onChatInputInteraction(ChatInputInteractionEvent event) {
-                        event.deferReply().withEphemeral(true).subscribe();
+                        Mono<Void> deferMono = event.deferReply().withEphemeral(true);
+                        Mono<Void> editMono;
 
-                        try {
-                            Member member = event.getInteraction().getMember().get();
-                        } catch (NoSuchElementException e) {
-                            return event.editReply(DM_ERROR);
+                        Member member = event.getInteraction().getMember().orElse(null);
+                        if (member == null) {
+                            editMono = event.editReply(DM_ERROR).then();
+                            return deferMono.then(editMono);
                         }
 
                         String memberID = event.getInteraction().getMember().get().getId().asString();
@@ -507,7 +505,7 @@ public class Main {
 
                         if (commandName.equals(BEGIN_COMMAND_NAME)) {
                             String studentNumber = event.getOption(STUDENT_ID_OPTION).get().getValue().get().asString();
-                            return event.getInteraction().getGuild()
+                            editMono = event.getInteraction().getGuild()
                                     .map(Guild::getName)
                                     .flatMap(name -> {
                                         String resultToReturn = VerificationUtilities.beginVerification(guildDataMap.get(guildSnowflake), studentNumber, sqlRunner, event.getInteraction().getMember().get(), emailSender, name);
@@ -521,7 +519,8 @@ public class Main {
                                             return event.editReply(resultToReturn).then(sendAdminMessage);
                                         }
                                         return event.editReply(resultToReturn);
-                                    });
+                                    }).then();
+                            return deferMono.then(editMono);
                         }
                         if (commandName.equals(VERIFY_COMMAND_NAME)) {
                             String tokenInput = event.getOption(VERIFICATION_CODE_OPTION).get().getValue().get().asString();
@@ -531,17 +530,18 @@ public class Main {
 
                             if (result.equals(VERIFY_COMMAND_SUCCESS)) {
                                 Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
-                                        .map(member -> member.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
+                                        .map(guildMember -> guildMember.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
                                         .get()
                                         .then();
 
                                 Mono<Void> addVerifiedRoleMono = event.getInteraction().getMember()
-                                        .map(member -> member.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID()))
+                                        .map(guildMember -> guildMember.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID()))
                                         .get()
                                         .then();
-                                return event.editReply(result).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono).then(sendAdminMessage);
+
+                                return deferMono.then(event.editReply(result)).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono).then(sendAdminMessage);
                             } else {
-                                return event.editReply(result).then(sendAdminMessage);
+                                return deferMono.then(event.editReply(result)).then(sendAdminMessage);
                             }
                         }
                         if (commandName.equals(SETUP_COMMAND_NAME)) {
@@ -571,7 +571,7 @@ public class Main {
 
                             String mode = event.getOption(BUTTON_MODE_OPTION).get().getValue().get().asString();
                             if (!(mode.equals("SLASH") || mode.equals("MODAL") || mode.equals("MODAL_SINGLE"))) {
-                                return event.editReply("You have not entered a correct mode!");
+                                return deferMono.then(event.editReply("You have not entered a correct mode!"));
                             }
 
                             try {
@@ -586,7 +586,7 @@ public class Main {
                                 String finalUnverifiedRole = unverifiedRole;
                                 boolean finalApplyUnverified = applyUnverified;
                                 boolean finalIsVerificationLoggingEnabled = isVerificationLoggingEnabled;
-                                return event.getInteraction()
+                                editMono = event.getInteraction()
                                         .getMember()
                                         .get()
                                         .getBasePermissions()
@@ -622,12 +622,12 @@ public class Main {
                                                             .collectList()
                                                             .flatMap(members -> {
                                                                 Mono<Void> addRoleToMembers = Mono.empty();
-                                                                for (Member member : members) {
-                                                                    boolean hasUnverifiedRole = member.getRoleIds().contains(finalUnverifiedRoleSnowflake);
-                                                                    boolean hasVerifiedRole = member.getRoleIds().contains(verifiedRoleSnowflake);
+                                                                for (Member guildMember : members) {
+                                                                    boolean hasUnverifiedRole = guildMember.getRoleIds().contains(finalUnverifiedRoleSnowflake);
+                                                                    boolean hasVerifiedRole = guildMember.getRoleIds().contains(verifiedRoleSnowflake);
 
                                                                     if (!hasUnverifiedRole && !hasVerifiedRole) {
-                                                                        Mono<Void> addRoleToMember = member.addRole(finalUnverifiedRoleSnowflake);
+                                                                        Mono<Void> addRoleToMember = guildMember.addRole(finalUnverifiedRoleSnowflake);
                                                                         addRoleToMembers = addRoleToMembers.and(addRoleToMember);
                                                                     }
                                                                 }
@@ -654,9 +654,10 @@ public class Main {
                                             } else {
                                                 return event.editReply(INSUFFICIENT_PERMISSIONS_ERROR);
                                             }
-                                        });
+                                        }).then();
+                                return deferMono.then(editMono);
                             } catch (NumberFormatException numberFormatException) {
-                                return event.editReply("There is an error with one of your options, please try again...");
+                                return deferMono.then(event.editReply("There is an error with one of your options, please try again..."));
                             }
                         }
                         if (commandName.equals(HELP_COMMAND_NAME)) {
@@ -693,12 +694,12 @@ public class Main {
                                                 .flatMap(channel -> channel.createMessage(message));
 
                                         manualVerificationsMap.merge(memberID, 1, Integer::sum);
-                                        return event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS).and(sendMessageToAdmins);
+                                        return deferMono.then(event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS)).and(sendMessageToAdmins);
                                     } else {
-                                        return event.editReply(TOO_MANY_VERIFICATION_REQUESTS_ERROR);
+                                        return deferMono.then(event.editReply(TOO_MANY_VERIFICATION_REQUESTS_ERROR));
                                     }
                                 } else {
-                                    return event.editReply(ACCOUNT_ALREADY_VERIFIED_ERROR);
+                                    return deferMono.then(event.editReply(ACCOUNT_ALREADY_VERIFIED_ERROR));
                                 }
                             } else {
                                 result = SERVER_NOT_CONFIGURED_ERROR;
@@ -707,7 +708,7 @@ public class Main {
                         if (result == null) {
                             result = DEFAULT_ERROR;
                         }
-                        return event.editReply(result);
+                        return deferMono.then(event.editReply(result));
                     }
                 }).then();
 
