@@ -13,6 +13,7 @@ public class DataSource {
         config.setJdbcUrl(url);
         config.setUsername(user);
         config.setPassword(password);
+        config.setMaxLifetime(900000);
         config.addDataSourceProperty( "cachePrepStmts" , "true" );
         config.addDataSourceProperty( "prepStmtCacheSize" , "250" );
         config.addDataSourceProperty( "prepStmtCacheSqlLimit" , "2048" );
