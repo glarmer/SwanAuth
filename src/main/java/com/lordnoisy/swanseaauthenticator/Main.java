@@ -529,10 +529,15 @@ public class Main {
                             Mono<Void> sendAdminMessage = DiscordUtilities.getVerificationLoggingMono(guildData, memberID, result, gateway, FINAL);
 
                             if (result.equals(VERIFY_COMMAND_SUCCESS)) {
-                                Mono<Void> removeUnverifiedRoleMono = event.getInteraction().getMember()
-                                        .map(guildMember -> guildMember.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
-                                        .get()
-                                        .then();
+                                Mono<Void> removeUnverifiedRoleMono;
+                                if (guildData.getUnverifiedRoleID() == null) {
+                                    removeUnverifiedRoleMono = Mono.empty();
+                                } else {
+                                    removeUnverifiedRoleMono = event.getInteraction().getMember()
+                                            .map(guildMember -> guildMember.removeRole(guildDataMap.get(guildSnowflake).getUnverifiedRoleID()))
+                                            .get()
+                                            .then();
+                                }
 
                                 Mono<Void> addVerifiedRoleMono = event.getInteraction().getMember()
                                         .map(guildMember -> guildMember.addRole(guildDataMap.get(guildSnowflake).getVerifiedRoleID()))
