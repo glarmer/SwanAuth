@@ -834,6 +834,7 @@ public class Main {
                 }).then();
 
                 Mono<Void> modalListener = gateway.on(ModalSubmitInteractionEvent.class, event -> {
+                    Mono<Void> deferMono = event.deferReply().withEphemeral(true);
                     String modalID = event.getCustomId();
                     if (modalID.equals(MODAL_ID)) {
                         for (TextInput textInput : event.getComponents(TextInput.class)) {
@@ -841,14 +842,14 @@ public class Main {
                             if (inputID.startsWith(INPUT_ID)) {
                                 String studentNumber = textInput.getValue().get();
                                 Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
-                                return event.getInteraction().getGuild()
+                                return deferMono.then(event.getInteraction().getGuild()
                                         .map(Guild::getName)
                                         .flatMap(name -> {
                                             String memberID = event.getInteraction().getMember().get().getId().asString();
                                             String resultToReturn = VerificationUtilities.beginVerification(guildDataMap.get(guildSnowflake), studentNumber, sqlRunner, event.getInteraction().getMember().get(), emailSender, name);
                                             if (resultToReturn.equals(USER_IS_BANNED_RESULT)) {
                                                 Mono<Void> ban = event.getInteraction().getMember().get().ban().then();
-                                                return event.reply(resultToReturn).withEphemeral(true).and(ban);
+                                                return event.editReply(resultToReturn).and(ban);
                                             }
                                             if (resultToReturn.equals(BEGIN_COMMAND_SUCCESS_RESULT)) {
                                                 resultToReturn = BEGIN_COMMAND_SUCCESS_RESULT_MODAL;
@@ -858,11 +859,11 @@ public class Main {
 
                                                 Mono<Void> sendAdminMessage = DiscordUtilities.getVerificationLoggingMono(guildData, memberID, resultToReturn, gateway, BEGIN);
 
-                                                return event.reply(resultToReturn).withComponents(ActionRow.of(button)).withEphemeral(true).then(sendAdminMessage);
+                                                return event.editReply(resultToReturn).withComponents(ActionRow.of(button)).then(sendAdminMessage).then();
                                             } else {
-                                                return event.reply(resultToReturn).withEphemeral(true);
+                                                return event.editReply(resultToReturn).then();
                                             }
-                                        });
+                                        }));
                             }
                         }
                     } else if (modalID.equals(MODAL_FINISH_ID)) {
@@ -889,9 +890,9 @@ public class Main {
                                             .map(member -> member.addRole(guildDataMap.get(guildID).getVerifiedRoleID()))
                                             .get();
 
-                                    return event.reply(result).withEphemeral(true).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono).then(sendAdminMessage);
+                                    return deferMono.then(event.editReply(result).and(removeUnverifiedRoleMono).and(addVerifiedRoleMono).then(sendAdminMessage));
                                 } else {
-                                    return event.reply(result).withEphemeral(true).then(sendAdminMessage);
+                                    return deferMono.then(event.editReply(result).then(sendAdminMessage));
                                 }
                             }
                         }
