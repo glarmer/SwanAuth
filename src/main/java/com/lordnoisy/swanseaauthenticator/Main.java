@@ -21,6 +21,7 @@ import discord4j.core.object.component.TextInput;
 import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
 import discord4j.core.object.entity.Message;
+import discord4j.core.object.entity.Role;
 import discord4j.core.object.entity.channel.GuildMessageChannel;
 import discord4j.core.spec.*;
 import discord4j.discordjson.json.ApplicationCommandOptionChoiceData;
@@ -118,11 +119,14 @@ public class Main {
     public static final String BUTTON_MODE_OPTION = "mode";
     public static final String BUTTON_MODE_OPTION_DESCRIPTION = "Select if users should be prompted to use a button instead of a slash command.";
     public static final String BUTTON_VERIFY = "verify";
+    public static final String BUTTON_MANUAL_VERIFY = "manual_verify";
     public static final String INPUT_CODE = "verificationcode";
     public static final String INPUT_ID = "swanauthinput";
     public static final String INPUT_STUDENT = "studentnumber";
+    public static final String INPUT_NON_STUDENT = "manual_reason";
     public static final String MODAL_FINISH_ID = "swanauthfinishmodal";
     public static final String MODAL_ID = "swanauthmodal";
+    public static final String MODAL_MANUAL_ID = "swanauthmanualmodal";
     public static final String VERIFICATION_LOGGING_OPTION = "verification_logging";
     public static final String VERIFICATION_LOGGING_OPTION_DESCRIPTION = "Enables logging in the admin channel for when people attempt verification!";
     public static final String BEGIN = "BEGIN";
@@ -644,6 +648,7 @@ public class Main {
                                                 Mono<Void> sendVerificationMessage = Mono.empty();
                                                 if (mode.equals("MODAL_SINGLE")) {
                                                     Button button = Button.primary(BUTTON_ID + ":" + BUTTON_VERIFY + ":" + "null", "Verify");
+                                                    Button manualButton = Button.secondary(BUTTON_ID + ":" + BUTTON_MANUAL_VERIFY + ":" + "null", "No student ID?");
                                                     EmbedCreateSpec embedCreateSpec = EmbedCreateSpec.builder()
                                                             .title("SwanAuth Verification")
                                                             .description("In order to fully participate within the server you need to verify your account. Start by pressing the verify button below!")
@@ -653,7 +658,7 @@ public class Main {
 
                                                     sendVerificationMessage = gateway.getChannelById(verificationChannelSnowflake)
                                                             .ofType(GuildMessageChannel.class)
-                                                            .flatMap(channel -> channel.createMessage(embedCreateSpec).withComponents(ActionRow.of(button)).then());
+                                                            .flatMap(channel -> channel.createMessage(embedCreateSpec).withComponents(ActionRow.of(button, manualButton)).then());
                                                 }
                                                 return event.editReply(SETUP_COMMAND_SUCCESS).and(applyRolesMono).and(sendVerificationMessage);
                                             } else {
@@ -748,6 +753,17 @@ public class Main {
                                                 .build();
 
                                         return event.presentModal(modal);
+                                    } else if (buttonPressed.equals(BUTTON_MANUAL_VERIFY)) {
+                                        //Code for verify button
+                                        InteractionPresentModalSpec modal = InteractionPresentModalSpec.builder()
+                                                .title("SwanAuth Manual Verification")
+                                                .customId(MODAL_MANUAL_ID)
+                                                .addComponent(ActionRow.of(TextInput.paragraph(
+                                                                INPUT_ID + ":" + INPUT_NON_STUDENT + ":" + memberID, "Reason for manual verification?")
+                                                        .required(true)))
+                                                .build();
+
+                                        return event.presentModal(modal);
                                     } else if (buttonPressed.equals(BUTTON_FINISH_VERIFICATION)) {
                                         InteractionPresentModalSpec modal = InteractionPresentModalSpec.builder()
                                                 .title("SwanAuth Verification")
@@ -796,6 +812,11 @@ public class Main {
                                             Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
 
                                             manualVerificationsMap.remove(memberSnowflake.asString());
+
+                                            String mode = guildDataMap.get(guildSnowflake).getMode();
+                                            if (mode.equals("MODAL_SINGLE")) {
+                                                return event.reply("The user has been verified successfully! It could be worth notifying them of this.").withEphemeral(true).then(giveMemberVerifiedRole).and(removeButtons);
+                                            }
                                             return event.reply("The user has been verified successfully!").withEphemeral(true).then(giveMemberVerifiedRole).then(notifyMemberOfResult).and(removeButtons);
                                         } else if (buttonPressed.equals(BUTTON_DENY)) {
                                             Embed oldEmbed = event.getMessage().get().getEmbeds().get(0);
@@ -819,6 +840,11 @@ public class Main {
                                             Mono<Message> removeButtons = event.getMessage().get().edit(editSpec);
 
                                             manualVerificationsMap.remove(memberSnowflake.asString());
+                                            String mode = guildDataMap.get(guildSnowflake).getMode();
+                                            if (mode.equals("MODAL_SINGLE")) {
+                                                return event.reply("The user has been denied manual verification, it could be worth notifying them of this.").withEphemeral(true).and(removeButtons);
+
+                                            }
                                             return event.reply("The user has been denied manual verification and notified accordingly").withEphemeral(true).and(notifyMemberOfResult).and(removeButtons);
                                         } else {
                                             return event.reply(DEFAULT_ERROR).withEphemeral(true);
@@ -864,6 +890,42 @@ public class Main {
                                                 return event.editReply(resultToReturn).then();
                                             }
                                         }));
+                            }
+                        }
+                    } else if (modalID.equals(MODAL_MANUAL_ID)) {
+                        for (TextInput textInput : event.getComponents(TextInput.class)) {
+                            String inputID = textInput.getCustomId();
+                            if (inputID.startsWith(INPUT_ID)) {
+                                String reason = textInput.getValue().get();
+                                Snowflake guildSnowflake = event.getInteraction().getGuildId().get();
+                                Member member = event.getInteraction().getMember().get();
+                                String memberID = member.getId().asString();
+                                if (manualVerificationsMap.get(memberID) == null || manualVerificationsMap.get(memberID) < MAX_VERIFICATION_REQUESTS) {
+                                    Snowflake adminChannelID = guildDataMap.get(guildSnowflake).getAdminChannelID();
+                                    Button acceptButton = Button.success(BUTTON_ID + ":" + BUTTON_ACCEPT + ":" + memberID, "Accept");
+                                    Button denyButton = Button.danger(BUTTON_ID + ":" + BUTTON_DENY + ":" + memberID, "Deny");
+
+                                    String memberMention = DiscordUtilities.getMention(memberID);
+
+                                    EmbedCreateSpec embed = EmbedCreateSpec.builder()
+                                            .title("A user has requested manual verification!")
+                                            .color(EMBED_COLOUR)
+                                            .description(memberMention + " gave the following reason: " + reason)
+                                            .footer(EmbedCreateFields.Footer.of("SwanAuth | " + StringUtilities.getDateTime(), FOOTER_ICON_URL))
+                                            .build();
+
+                                    MessageCreateSpec message = MessageCreateSpec.builder()
+                                            .addEmbed(embed)
+                                            .addComponent(ActionRow.of(acceptButton, denyButton))
+                                            .build();
+
+                                    Mono<Message> sendMessageToAdmins = gateway.getChannelById(adminChannelID)
+                                            .ofType(GuildMessageChannel.class)
+                                            .flatMap(channel -> channel.createMessage(message));
+
+                                    manualVerificationsMap.merge(memberID, 1, Integer::sum);
+                                    return deferMono.then(event.editReply(MANUAL_VERIFICATION_COMMAND_SUCCESS)).and(sendMessageToAdmins);
+                                }
                             }
                         }
                     } else if (modalID.equals(MODAL_FINISH_ID)) {
